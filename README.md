@@ -106,4 +106,8 @@ npx serve .
 
 ---
 
+## Live Demo
+
+🌐 **https://hattybin.github.io/kickscavdash/**
+
 Built for the Ice Poseidon Kick.com scavenger hunt community 🎯
