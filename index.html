@@ -1,0 +1,2137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scavenger Hunt - Live Location Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background: #000;
+            color: #fff;
+        }
+        
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+        
+        .info-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #00ff41;
+            min-width: 250px;
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+        
+        .header {
+            color: #00ff41;
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .stats {
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+        }
+        
+        .contestant-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .contestant-item {
+            background: rgba(255, 255, 255, 0.1);
+            margin: 3px 0;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .contestant-item:hover {
+            background: rgba(0, 255, 65, 0.2);
+        }
+        
+        .contestant-name {
+            font-weight: bold;
+            color: #00ff41;
+        }
+        
+        .contestant-stats {
+            color: #ccc;
+            font-size: 11px;
+        }
+        
+        .contestant-inactive {
+            opacity: 0.6;
+            border-left: 3px solid #ff4444;
+        }
+        
+        .contestant-stale {
+            opacity: 0.8;
+            border-left: 3px solid #ff9500;
+        }
+        
+        .controls {
+            position: absolute;
+            top: 80px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 8px;
+            border: 2px solid #00ff41;
+            z-index: 1000;
+            width: 200px;
+        }
+        
+        .control-btn {
+            background: #00ff41;
+            color: #000;
+            border: none;
+            padding: 8px 12px;
+            margin: 2px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .control-btn:hover {
+            background: #00cc35;
+        }
+        
+        .status {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid #00ff41;
+            font-size: 12px;
+            z-index: 1000;
+        }
+        
+        .loading {
+            color: #ff9500;
+        }
+        
+        .error {
+            color: #ff0000;
+        }
+        
+        .success {
+            color: #00ff41;
+        }
+        
+        .leaflet-popup-content-wrapper {
+            background: #000 !important;
+            color: #fff !important;
+            border: 2px solid #00ff41 !important;
+            border-radius: 8px !important;
+        }
+        
+        .leaflet-popup-content {
+            color: #fff !important;
+        }
+        
+        .popup-content {
+            padding: 10px;
+        }
+        
+        .popup-name {
+            color: #00ff41;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .popup-stats {
+            margin-top: 5px;
+            font-size: 12px;
+        }
+        
+        .leaflet-popup-tip {
+            background: #000 !important;
+            border: 1px solid #00ff41 !important;
+        }
+        
+        /* Custom marker styles */
+        .marker {
+            background: #00ff41;
+            border: 2px solid #000;
+            border-radius: 50%;
+            width: 12px;
+            height: 12px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .marker:hover {
+            transform: scale(1.5);
+        }
+        
+        .marker.high-score {
+            background: #ffff00;
+            width: 16px;
+            height: 16px;
+        }
+        
+        .marker.top-score {
+            background: #ff4500;
+            width: 20px;
+            height: 20px;
+        }
+        
+        .overlay-panel {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #00ff41;
+            border-radius: 8px;
+            overflow: hidden;
+            z-index: 1000;
+            width: 300px;
+            height: 200px;
+        }
+        
+        .overlay-header {
+            background: rgba(0, 255, 65, 0.2);
+            color: #00ff41;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: bold;
+            text-align: center;
+            border-bottom: 1px solid #00ff41;
+        }
+        
+        .overlay-iframe {
+            width: 100%;
+            height: calc(100% - 32px);
+            border: none;
+            display: block;
+        }
+        
+        .search-panel {
+            position: absolute;
+            top: 330px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 8px;
+            border: 2px solid #00ff41;
+            z-index: 1000;
+            width: 200px;
+        }
+        
+        .search-input {
+            width: calc(100% - 16px);
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid #00ff41;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        .search-input::placeholder {
+            color: #888;
+        }
+        
+        .search-results {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 5px;
+        }
+        
+        .search-result {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px;
+            margin: 2px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+        
+        .search-result:hover {
+            background: rgba(0, 255, 65, 0.2);
+        }
+        
+        .search-result-name {
+            color: #00ff41;
+            font-weight: bold;
+        }
+        
+        .search-result-details {
+            color: #ccc;
+            font-size: 11px;
+        }
+        
+        /* Priority marker styles and animations */
+        .priority-marker {
+            z-index: 1000 !important;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        /* Override Leaflet marker pane z-index for hot zones */
+        .leaflet-marker-pane .priority-marker {
+            z-index: 1000 !important;
+        }
+        
+        /* Context menu styles */
+        .context-menu {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid #00ff41;
+            border-radius: 8px;
+            padding: 8px 0;
+            z-index: 2000;
+            min-width: 200px;
+            display: none;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+        }
+        
+        .context-menu-item {
+            padding: 10px 15px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 14px;
+            border-bottom: 1px solid #333;
+        }
+        
+        .context-menu-item:last-child {
+            border-bottom: none;
+        }
+        
+        .context-menu-item:hover {
+            background: #00ff41;
+            color: #000;
+        }
+        
+        .context-menu-item.disabled {
+            color: #666;
+            cursor: not-allowed;
+        }
+        
+        .context-menu-item.disabled:hover {
+            background: none;
+            color: #666;
+        }
+        
+        /* Hot zone alert banner */
+        .hotzone-alert {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(45deg, #ff4500, #ff6500);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: 3px solid #fff;
+            box-shadow: 0 4px 20px rgba(255, 69, 0, 0.6);
+            z-index: 2000;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 16px;
+            animation: alertPulse 2s infinite;
+            display: none;
+            max-width: 400px;
+            text-align: center;
+        }
+        
+        .hotzone-alert:hover {
+            transform: translateX(-50%) scale(1.05);
+            box-shadow: 0 6px 25px rgba(255, 69, 0, 0.8);
+        }
+        
+        .hotzone-alert .fire-icon {
+            font-size: 20px;
+            margin-right: 8px;
+            animation: fireFlicker 1s infinite alternate;
+        }
+        
+        @keyframes alertPulse {
+            0%, 100% { box-shadow: 0 4px 20px rgba(255, 69, 0, 0.6); }
+            50% { box-shadow: 0 4px 30px rgba(255, 69, 0, 1); }
+        }
+        
+        @keyframes fireFlicker {
+            0% { transform: rotate(-2deg) scale(1); }
+            100% { transform: rotate(2deg) scale(1.1); }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="hotzone-alert" class="hotzone-alert">
+        <span class="fire-icon">🔥</span>
+        <span id="alert-text">Hot Zone Detected!</span>
+    </div>
+    
+    <div id="context-menu" class="context-menu">
+        <div class="context-menu-item" onclick="copyCoordinates()">📋 Copy Coordinates</div>
+        <div class="context-menu-item" onclick="navigateToLocation()">🧭 Navigate Here</div>
+        <div class="context-menu-item" onclick="addWaypoint()">📍 Add Waypoint</div>
+        <div class="context-menu-item" onclick="registerRfidLocation()">🏷️ Register RFID Location</div>
+        <div class="context-menu-item" onclick="measureFromHere()">📏 Measure Distance</div>
+        <div class="context-menu-item" onclick="centerMapHere()">🎯 Center Map Here</div>
+        <div class="context-menu-item" onclick="searchNearby()">🔍 Search Nearby</div>
+    </div>
+    
+    <div class="controls">
+        <div class="header" style="margin-bottom: 8px;">Map Controls</div>
+        <button class="control-btn" onclick="toggleAutoRefresh()">Auto Refresh: ON</button>
+        <button class="control-btn" onclick="refreshData()">Refresh Now</button>
+        <button class="control-btn" onclick="fitToMarkers()">Fit All</button>
+        <button class="control-btn" onclick="toggleGuessAnalysis()">Guess Analysis: OFF</button>
+        <button class="control-btn" onclick="toggleRfidLocations()">Show RFID Locations</button>
+        <button class="control-btn" onclick="refreshRfidData()" style="display: none;" id="refresh-rfid-btn">Refresh RFID Data</button>
+    </div>
+    
+    <div class="search-panel">
+        <input 
+            type="text" 
+            class="search-input" 
+            id="search-input"
+            placeholder="Search live streamers, places, or RFID #..."
+            oninput="handleSearch()"
+        >
+        <div class="search-results" id="search-results"></div>
+    </div>
+    
+    <div class="info-panel">
+        <div class="header">Live Streamer Data</div>
+        <div class="stats" id="stats">
+            <div class="stat-row">
+                <span>GPS Status:</span>
+                <span id="gps-status">--</span>
+            </div>
+            <div class="stat-row">
+                <span>Total Live Streamers:</span>
+                <span id="total-count">--</span>
+            </div>
+            <div class="stat-row">
+                <span>Top Score:</span>
+                <span id="top-score">--</span>
+            </div>
+            <div class="stat-row">
+                <span>Current RFID:</span>
+                <span id="current-location">--</span>
+            </div>
+            <div class="stat-row">
+                <span>Last Update:</span>
+                <span id="last-update">--</span>
+            </div>
+            <div class="stat-row">
+                <span>Texas Time:</span>
+                <span id="texas-time">--</span>
+            </div>
+            <div class="stat-row">
+                <span>Local Time:</span>
+                <span id="local-time">--</span>
+            </div>
+        </div>
+        
+        <div class="contestant-list" id="contestant-list">
+            <div style="color: #666; text-align: center;">Loading live streamers...</div>
+        </div>
+    </div>
+    
+    <div class="status" id="status">
+        <span class="loading">Initializing map...</span>
+    </div>
+    
+    <div class="overlay-panel">
+        <div class="overlay-header">DariusIRL Stream Overlay</div>
+        <iframe 
+            class="overlay-iframe" 
+            src="https://cxhunt-production.up.railway.app/overlay/dariusirl"
+            title="DariusIRL Stream Overlay"
+            allowfullscreen>
+        </iframe>
+    </div>
+
+    <script>
+        // Configuration
+        const API_URL = 'https://viewerapi.iceposeidon.com/contestant.locations';
+        const AUSTIN_BOUNDS = [
+            [30.00663812735884, -98.16060123756967], // Southwest [lat, lng]
+            [30.84173613293179, -97.19187951067062]  // Northeast [lat, lng]
+        ];
+        const AUSTIN_CENTER = [30.27037770663356, -97.74381171256353]; // [lat, lng]
+        
+        // Global variables
+        let map;
+        let contestants = [];
+        let markers = [];
+        let autoRefresh = true;
+        let refreshInterval;
+        let locationCache = new Map(); // Cache last known locations
+        let gpsState = 'unknown'; // 'on', 'off', 'unknown'
+        let lastGpsChangeTime = null;
+        let viewerGuesses = new Map(); // Cache viewer guess data
+        let guessAnalysis = {
+            hotZones: [],
+            recentGuesses: [],
+            successPatterns: []
+        };
+        let contestantActivity = new Map(); // Track RFID scan activity over time
+        let channelIcons = new Map(); // Cache Kick profile pictures
+        
+        // GPS detection constants
+        const GPS_OFF_THRESHOLD = 0.0001; // If all contestants within this distance, GPS is likely off
+        const FALLBACK_COORDS = [30.24753599760347, -97.71820629756418]; // The coordinate everyone gets when GPS is off
+        
+        // Initialize map
+        function initMap() {
+            // Initialize Leaflet map
+            map = L.map('map').setView(AUSTIN_CENTER, 12);
+            
+            // Add OpenStreetMap tiles
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+            
+            // Set max bounds
+            map.setMaxBounds(AUSTIN_BOUNDS);
+            
+            updateStatus('Map loaded', 'success');
+            
+            // Load cached RFID data if available
+            loadRfidCache();
+            
+            // Setup context menu
+            setupContextMenu();
+            
+            loadContestants();
+            
+            // Start auto-refresh
+            if (autoRefresh) {
+                refreshInterval = setInterval(loadContestants, 5000); // Every 5 seconds
+            }
+        }
+        
+        // Detect GPS state based on location clustering
+        function detectGpsState(contestants) {
+            if (contestants.length === 0) return 'unknown';
+            
+            // Check if everyone is at the exact same location (GPS off)
+            const firstLocation = [contestants[0][2], contestants[0][3]];
+            const allSameLocation = contestants.every(contestant => 
+                Math.abs(contestant[2] - firstLocation[0]) < GPS_OFF_THRESHOLD &&
+                Math.abs(contestant[3] - firstLocation[1]) < GPS_OFF_THRESHOLD
+            );
+            
+            // Check if everyone is at the known fallback coordinates
+            const allAtFallback = Math.abs(firstLocation[0] - FALLBACK_COORDS[0]) < GPS_OFF_THRESHOLD &&
+                                Math.abs(firstLocation[1] - FALLBACK_COORDS[1]) < GPS_OFF_THRESHOLD;
+            
+            if (allSameLocation && allAtFallback) {
+                return 'off';
+            } else if (allSameLocation) {
+                return 'clustered'; // Everyone at same spot, but not fallback coords
+            } else {
+                return 'on';
+            }
+        }
+        
+        // Update location cache with current data
+        function updateLocationCache(contestants) {
+            const currentGpsState = detectGpsState(contestants);
+            
+            // Only cache locations when GPS is on
+            if (currentGpsState === 'on') {
+                contestants.forEach(contestant => {
+                    const [kickUser, displayName, lat, lng, points, rfids] = contestant;
+                    const key = kickUser;
+                    
+                    // Store location with timestamp
+                    locationCache.set(key, {
+                        lat,
+                        lng,
+                        timestamp: Date.now(),
+                        displayName,
+                        points,
+                        rfids
+                    });
+                });
+            }
+            
+            // Track GPS state changes
+            if (currentGpsState !== gpsState) {
+                console.log(`GPS state changed: ${gpsState} -> ${currentGpsState}`);
+                const previousState = gpsState;
+                gpsState = currentGpsState;
+                lastGpsChangeTime = new Date();
+                
+                // Show notification of state change
+                if (previousState !== 'unknown') {
+                    const message = currentGpsState === 'off' ? 
+                        '📍 GPS tracking disabled by Ice' : 
+                        '📍 GPS tracking enabled by Ice';
+                    updateStatus(message, currentGpsState === 'off' ? 'error' : 'success');
+                }
+            }
+        }
+        
+        // Get display data (live or cached)
+        // Track contestant RFID activity over time
+        function trackContestantActivity(contestants) {
+            const currentTime = Date.now();
+            
+            contestants.forEach(contestant => {
+                const [kickUser, displayName, lat, lng, points, rfids] = contestant;
+                const key = kickUser;
+                
+                if (contestantActivity.has(key)) {
+                    const activity = contestantActivity.get(key);
+                    
+                    // Check if RFID count increased (new scan)
+                    if (rfids > activity.lastRfidCount) {
+                        activity.lastRfidScan = currentTime;
+                        activity.lastRfidCount = rfids;
+                        activity.totalScans = rfids;
+                    }
+                } else {
+                    // New contestant
+                    contestantActivity.set(key, {
+                        displayName,
+                        lastRfidScan: currentTime,
+                        lastRfidCount: rfids,
+                        totalScans: rfids,
+                        firstSeen: currentTime
+                    });
+                }
+            });
+        }
+        
+        function getContestantActivityStatus(kickUser) {
+            const activity = contestantActivity.get(kickUser);
+            if (!activity) return { status: 'unknown', hoursInactive: 0 };
+            
+            const hoursSinceLastScan = (Date.now() - activity.lastRfidScan) / (1000 * 60 * 60);
+            
+            if (hoursSinceLastScan > 24) {
+                return { 
+                    status: 'inactive', 
+                    hoursInactive: Math.floor(hoursSinceLastScan) 
+                };
+            } else if (hoursSinceLastScan > 12) {
+                return { 
+                    status: 'stale', 
+                    hoursInactive: Math.floor(hoursSinceLastScan) 
+                };
+            } else {
+                return { 
+                    status: 'active', 
+                    hoursInactive: Math.floor(hoursSinceLastScan) 
+                };
+            }
+        }
+
+        function getDisplayData(contestants) {
+            const currentGpsState = detectGpsState(contestants);
+            
+            if (currentGpsState === 'on') {
+                // GPS is on, use live data
+                return {
+                    data: contestants,
+                    isLive: true,
+                    gpsState: currentGpsState
+                };
+            } else {
+                // GPS is off, use cached locations where available
+                const mixedData = contestants.map(contestant => {
+                    const [kickUser, displayName, lat, lng, points, rfids] = contestant;
+                    const cached = locationCache.get(kickUser);
+                    
+                    if (cached && (Date.now() - cached.timestamp < 24 * 60 * 60 * 1000)) { // Use cache for up to 24 hours
+                        // Use cached location but current points/rfids
+                        return [kickUser, displayName, cached.lat, cached.lng, points, rfids, true]; // true = using cached location
+                    } else {
+                        // No cache available, use current (fallback) data
+                        return [kickUser, displayName, lat, lng, points, rfids, false]; // false = using live (fallback) data
+                    }
+                });
+                
+                return {
+                    data: mixedData,
+                    isLive: false,
+                    gpsState: currentGpsState
+                };
+            }
+        }
+        
+        // Load contestant data from API
+        async function loadContestants() {
+            try {
+                updateStatus('Loading live streamer data...', 'loading');
+                
+                const response = await fetch(API_URL, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'Accept': 'application/json, text/plain, */*',
+                        'Referer': 'https://event.iceposeidon.com/',
+                        'Origin': 'https://event.iceposeidon.com'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const rawData = await response.json();
+                
+                console.log('Raw API data:', rawData);
+                console.log('Number of contestants:', rawData.length);
+                
+                // Update cache and detect GPS state
+                updateLocationCache(rawData);
+                
+                // Track contestant activity
+                trackContestantActivity(rawData);
+                
+                // Get display data (live or cached)
+                const displayInfo = getDisplayData(rawData);
+                contestants = displayInfo.data;
+                
+                console.log('Display data:', contestants.slice(0, 5));
+                console.log('GPS State:', displayInfo.gpsState);
+                console.log('Using live data:', displayInfo.isLive);
+                
+                await updateMap();
+                updateStats();
+                updateContestantList();
+                
+                // Update status with GPS state info
+                const statusMsg = displayInfo.isLive ? 
+                    `Loaded ${contestants.length} live streamers (GPS ON)` :
+                    `Loaded ${contestants.length} live streamers (GPS OFF - using cached locations)`;
+                
+                updateStatus(statusMsg, displayInfo.isLive ? 'success' : 'loading');
+                
+            } catch (error) {
+                console.error('Error loading live streamers:', error);
+                updateStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Update map markers
+        async function updateMap() {
+            // Clear existing markers
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+            
+            console.log('Creating markers for', contestants.length, 'contestants');
+            
+            // Group contestants by location to handle clusters
+            const locationGroups = {};
+            contestants.forEach((contestant) => {
+                const [kickUser, displayName, lat, lng, points, rfids, isCached] = contestant;
+                const locationKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+                
+                if (!locationGroups[locationKey]) {
+                    locationGroups[locationKey] = [];
+                }
+                locationGroups[locationKey].push(contestant);
+            });
+            
+            console.log('Location clusters:', Object.keys(locationGroups).length);
+            
+            // Create markers for each location cluster
+            for (const [locationKey, contestantGroup] of Object.entries(locationGroups)) {
+                const [lat, lng] = locationKey.split(',').map(Number);
+                const groupSize = contestantGroup.length;
+                
+                console.log(`Cluster at (${lat}, ${lng}) with ${groupSize} contestants`);
+                
+                // Validate coordinates
+                if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+                    console.warn(`Invalid coordinates for cluster:`, { lat, lng });
+                    return;
+                }
+                
+                // Calculate cluster stats
+                const totalPoints = contestantGroup.reduce((sum, c) => sum + c[4], 0);
+                const highestScore = Math.max(...contestantGroup.map(c => c[4]));
+                const topContestant = contestantGroup.find(c => c[4] === highestScore);
+                const cachedCount = contestantGroup.filter(c => c[6] === true).length; // Count cached locations
+                const liveCount = groupSize - cachedCount;
+                
+                // Create custom icon based on cluster size, top score, and GPS state
+                let iconSize = [15 + (groupSize * 2), 15 + (groupSize * 2)]; // Bigger for more people
+                let iconColor = '#00ff41';
+                let borderStyle = '2px solid #000';
+                
+                // Color based on score
+                if (highestScore > 10000) {
+                    iconColor = '#ff4500';
+                } else if (highestScore > 1000) {
+                    iconColor = '#ffff00';
+                }
+                
+                // Border style based on GPS state
+                if (gpsState === 'off') {
+                    borderStyle = '3px dashed #ff0000'; // Red dashed border when GPS is off
+                } else if (cachedCount > 0 && liveCount > 0) {
+                    borderStyle = '3px dotted #ff9500'; // Orange dotted border for mixed data
+                }
+                
+                // Create custom icon with profile picture (for single contestants) or count (for clusters)
+                let customIcon;
+                if (groupSize === 1) {
+                    // Single contestant - try to use profile picture
+                    const [kickUser] = contestantGroup[0];
+                    const avatarUrl = await fetchKickChannelIcon(kickUser);
+                    customIcon = createProfileMarkerIcon(avatarUrl, groupSize, highestScore, gpsState, cachedCount, liveCount);
+                } else {
+                    // Multiple contestants - use count-based icon
+                    customIcon = L.divIcon({
+                        html: `
+                            <div style="background: ${iconColor}; border: ${borderStyle}; border-radius: 50%; width: ${iconSize[0]}px; height: ${iconSize[1]}px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: ${Math.min(12 + groupSize, 20)}px; color: #000;">
+                                ${groupSize}
+                            </div>
+                        `,
+                        className: 'custom-marker',
+                        iconSize: iconSize,
+                        iconAnchor: [iconSize[0]/2, iconSize[1]/2]
+                    });
+                }
+                
+                // GPS state info for popup
+                let gpsStatusText = '';
+                let gpsStatusColor = '#00ff41';
+                
+                if (gpsState === 'off') {
+                    gpsStatusText = '📍 GPS OFF (using cached locations)';
+                    gpsStatusColor = '#ff0000';
+                } else if (gpsState === 'clustered') {
+                    gpsStatusText = '📍 All contestants clustered together';
+                    gpsStatusColor = '#ff9500';
+                } else {
+                    gpsStatusText = '📍 GPS ON (live tracking)';
+                    gpsStatusColor = '#00ff41';
+                }
+                
+                // Create popup content for cluster
+                let popupContent = `
+                    <div class="popup-content">
+                        <div class="popup-name">${groupSize} Live Streamers at this location</div>
+                        <div style="color: ${gpsStatusColor}; font-size: 12px; margin: 4px 0;">${gpsStatusText}</div>
+                        <div class="popup-stats">
+                            <div>Total Points: ${totalPoints.toLocaleString()}</div>
+                            <div>Top Scorer: ${topContestant[1]} (${highestScore.toLocaleString()})</div>
+                            <div>Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}</div>
+                `;
+                
+                if (cachedCount > 0 && liveCount > 0) {
+                    popupContent += `<div style="font-size: 11px; color: #ff9500;">📡 ${liveCount} live, ${cachedCount} cached</div>`;
+                } else if (cachedCount > 0) {
+                    popupContent += `<div style="font-size: 11px; color: #ff0000;">📡 All locations from cache</div>`;
+                }
+                
+                popupContent += `<hr style="margin: 8px 0;">`;
+                
+                // Add top 5 contestants to popup
+                const sortedGroup = [...contestantGroup].sort((a, b) => b[4] - a[4]);
+                sortedGroup.slice(0, 5).forEach(contestant => {
+                    const [kickUser, displayName, cLat, cLng, points, rfids, isCached] = contestant;
+                    const cacheIndicator = isCached ? ' 📡' : '';
+                    popupContent += `
+                        <div style="margin: 2px 0;">
+                            <strong>${displayName}</strong>: ${points.toLocaleString()} pts, ${rfids} RFIDs${cacheIndicator}
+                        </div>
+                    `;
+                });
+                
+                if (groupSize > 5) {
+                    popupContent += `<div style="margin-top: 5px; font-style: italic;">...and ${groupSize - 5} more</div>`;
+                }
+                
+                popupContent += `
+                        </div>
+                    </div>
+                `;
+                
+                // Create and add marker
+                const marker = L.marker([lat, lng], { icon: customIcon })
+                    .bindPopup(popupContent)
+                    .addTo(map);
+                
+                markers.push(marker);
+            }
+        }
+        
+        // Update statistics
+        function updateStats() {
+            const totalCount = contestants.length;
+            const topScore = Math.max(...contestants.map(c => c[4]), 0);
+            const topRfids = Math.max(...contestants.map(c => c[5]), 0);
+            const currentLocation = Math.min(topRfids + 1, 50); // Next location they're working on (max 50)
+            const lastUpdate = new Date().toLocaleTimeString();
+            const cachedCount = contestants.filter(c => c[6] === true).length;
+            
+            document.getElementById('total-count').textContent = totalCount;
+            document.getElementById('top-score').textContent = topScore.toLocaleString();
+            document.getElementById('current-location').textContent = `${currentLocation}/50`;
+            document.getElementById('last-update').textContent = lastUpdate;
+            
+            // Update time displays
+            const now = new Date();
+            const texasTime = now.toLocaleTimeString('en-US', { 
+                timeZone: 'America/Chicago', 
+                hour12: true,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            const localTime = now.toLocaleTimeString('en-US', {
+                hour12: true,
+                hour: '2-digit', 
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            
+            document.getElementById('texas-time').textContent = texasTime;
+            document.getElementById('local-time').textContent = localTime;
+            
+            // Update GPS status if element exists
+            const gpsStatusEl = document.getElementById('gps-status');
+            if (gpsStatusEl) {
+                let statusText = '';
+                let statusColor = '#00ff41';
+                
+                if (gpsState === 'off') {
+                    statusText = `GPS OFF (${cachedCount} cached)`;
+                    statusColor = '#ff0000';
+                } else if (gpsState === 'clustered') {
+                    statusText = 'GPS ON (clustered)';
+                    statusColor = '#ff9500';
+                } else if (gpsState === 'on') {
+                    statusText = 'GPS ON (live)';
+                    statusColor = '#00ff41';
+                } else {
+                    statusText = 'GPS Unknown';
+                    statusColor = '#666';
+                }
+                
+                gpsStatusEl.textContent = statusText;
+                gpsStatusEl.style.color = statusColor;
+            }
+        }
+        
+        // Update contestant list
+        function updateContestantList() {
+            const listEl = document.getElementById('contestant-list');
+            
+            // Sort by RFID count first, then by points
+            const sorted = [...contestants].sort((a, b) => {
+                const [, , , , aPoints, aRfids] = a;
+                const [, , , , bPoints, bRfids] = b;
+                
+                // Primary sort: RFID count (descending)
+                if (bRfids !== aRfids) {
+                    return bRfids - aRfids;
+                }
+                
+                // Secondary sort: Points (descending) 
+                return bPoints - aPoints;
+            });
+            
+            const html = sorted.map(contestant => {
+                const [kickUser, displayName, lat, lng, points, rfids] = contestant;
+                const activityStatus = getContestantActivityStatus(kickUser);
+                
+                // Style based on activity status
+                let statusClass = '';
+                let statusText = '';
+                let statusColor = '#ccc';
+                
+                if (activityStatus.status === 'inactive') {
+                    statusClass = 'contestant-inactive';
+                    statusText = `💤 ${activityStatus.hoursInactive}h inactive`;
+                    statusColor = '#ff4444';
+                } else if (activityStatus.status === 'stale') {
+                    statusClass = 'contestant-stale';
+                    statusText = `⏰ ${activityStatus.hoursInactive}h ago`;
+                    statusColor = '#ff9500';
+                } else if (activityStatus.hoursInactive > 0) {
+                    statusText = `✅ ${activityStatus.hoursInactive}h ago`;
+                    statusColor = '#00ff41';
+                }
+                
+                return `
+                    <div class="contestant-item ${statusClass}" onclick="focusContestant(${lng}, ${lat})">
+                        <div class="contestant-name">${displayName}</div>
+                        <div class="contestant-stats">
+                            ${points.toLocaleString()} pts • ${rfids} RFIDs
+                            ${statusText ? `<br><span style="color: ${statusColor}; font-size: 10px;">${statusText}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            listEl.innerHTML = html;
+        }
+        
+        // Focus on specific contestant
+        function focusContestant(lng, lat) {
+            map.setView([lat, lng], 16);
+        }
+        
+        // Fit map to show all markers
+        function fitToMarkers() {
+            if (contestants.length === 0) return;
+            
+            const bounds = L.latLngBounds();
+            contestants.forEach(contestant => {
+                bounds.extend([contestant[2], contestant[3]]); // lat, lng
+            });
+            
+            map.fitBounds(bounds, { padding: [20, 20] });
+        }
+        
+        // Toggle auto-refresh
+        function toggleAutoRefresh() {
+            autoRefresh = !autoRefresh;
+            const btn = event.target;
+            
+            if (autoRefresh) {
+                btn.textContent = 'Auto Refresh: ON';
+                refreshInterval = setInterval(loadContestants, 5000);
+            } else {
+                btn.textContent = 'Auto Refresh: OFF';
+                clearInterval(refreshInterval);
+            }
+        }
+        
+        // Manual refresh
+        function refreshData() {
+            loadContestants();
+        }
+        
+        // Context Menu System
+        let contextMenuData = { lat: 0, lng: 0 };
+        let waypoints = [];
+        let measurementLine = null;
+        let measurementStart = null;
+        
+        function setupContextMenu() {
+            const contextMenu = document.getElementById('context-menu');
+            
+            // Right-click on map to show context menu
+            map.on('contextmenu', function(e) {
+                e.originalEvent.preventDefault();
+                
+                contextMenuData.lat = e.latlng.lat;
+                contextMenuData.lng = e.latlng.lng;
+                
+                // Position context menu at cursor
+                contextMenu.style.left = e.originalEvent.pageX + 'px';
+                contextMenu.style.top = e.originalEvent.pageY + 'px';
+                contextMenu.style.display = 'block';
+            });
+            
+            // Hide context menu on map click or outside click
+            map.on('click', hideContextMenu);
+            document.addEventListener('click', function(e) {
+                if (!contextMenu.contains(e.target)) {
+                    hideContextMenu();
+                }
+            });
+            
+            // Prevent map events when clicking context menu
+            contextMenu.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
+        }
+        
+        function hideContextMenu() {
+            document.getElementById('context-menu').style.display = 'none';
+        }
+        
+        function copyCoordinates() {
+            const coords = `${contextMenuData.lat.toFixed(6)}, ${contextMenuData.lng.toFixed(6)}`;
+            
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(coords).then(() => {
+                    updateStatus(`Coordinates copied: ${coords}`, 'success');
+                });
+            } else {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = coords;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                updateStatus(`Coordinates copied: ${coords}`, 'success');
+            }
+            hideContextMenu();
+        }
+        
+        function navigateToLocation() {
+            const lat = contextMenuData.lat.toFixed(6);
+            const lng = contextMenuData.lng.toFixed(6);
+            
+            // Create navigation URLs for different platforms
+            const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+            const appleMapsUrl = `maps://maps.google.com/maps?daddr=${lat},${lng}&amp;ll=`;
+            const universalUrl = `geo:${lat},${lng}`;
+            
+            // Detect user's platform/device
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+            const isAndroid = /android/i.test(userAgent);
+            const isMobile = isIOS || isAndroid;
+            
+            let navigationUrl = googleMapsUrl; // Default to Google Maps
+            
+            if (isMobile) {
+                if (isIOS) {
+                    // iOS: Try Apple Maps first, fallback to Google Maps
+                    navigationUrl = appleMapsUrl;
+                } else if (isAndroid) {
+                    // Android: Use geo: URI which opens default maps app
+                    navigationUrl = universalUrl;
+                }
+            }
+            
+            try {
+                // Try to open the navigation URL
+                const newWindow = window.open(navigationUrl, '_blank');
+                
+                // If popup blocker prevents opening, show fallback options
+                if (!newWindow || newWindow.closed || typeof newWindow.closed == 'undefined') {
+                    showNavigationOptions(lat, lng);
+                } else {
+                    updateStatus(`Opening navigation to ${lat}, ${lng}`, 'success');
+                }
+                
+            } catch (error) {
+                console.log('Navigation failed:', error);
+                showNavigationOptions(lat, lng);
+            }
+            
+            hideContextMenu();
+        }
+        
+        function showNavigationOptions(lat, lng) {
+            // Fallback: Show multiple navigation options
+            const options = [
+                { name: 'Google Maps', url: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}` },
+                { name: 'Apple Maps (iOS)', url: `maps://maps.google.com/maps?daddr=${lat},${lng}&amp;ll=` },
+                { name: 'Generic Maps App', url: `geo:${lat},${lng}` }
+            ];
+            
+            let message = `Navigate to ${lat}, ${lng}:\n\n`;
+            options.forEach((option, index) => {
+                message += `${index + 1}. ${option.name}\n`;
+            });
+            message += '\nChoose an option:';
+            
+            const choice = prompt(message + '\nEnter number (1-3):');
+            const choiceIndex = parseInt(choice) - 1;
+            
+            if (choiceIndex >= 0 && choiceIndex < options.length) {
+                try {
+                    window.open(options[choiceIndex].url, '_blank');
+                    updateStatus(`Opening ${options[choiceIndex].name}`, 'success');
+                } catch (error) {
+                    updateStatus('Unable to open navigation app', 'error');
+                }
+            }
+        }
+        
+        function addWaypoint() {
+            const waypoint = L.marker([contextMenuData.lat, contextMenuData.lng], {
+                icon: L.divIcon({
+                    html: `
+                        <div style="
+                            background: #2196F3; 
+                            border: 3px solid #fff; 
+                            border-radius: 50%; 
+                            width: 20px; 
+                            height: 20px; 
+                            display: flex; 
+                            align-items: center; 
+                            justify-content: center; 
+                            color: #fff;
+                            font-weight: bold;
+                            font-size: 12px;
+                        ">
+                            ${waypoints.length + 1}
+                        </div>
+                    `,
+                    className: 'waypoint-marker',
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
+                })
+            }).addTo(map);
+            
+            waypoint.bindPopup(`
+                <div class="popup-content">
+                    <div class="popup-name">📍 Waypoint ${waypoints.length + 1}</div>
+                    <div class="popup-stats">
+                        <div>Coordinates: ${contextMenuData.lat.toFixed(4)}, ${contextMenuData.lng.toFixed(4)}</div>
+                        <button onclick="removeWaypoint(${waypoints.length})" style="margin-top: 5px; padding: 5px 10px; background: #ff4444; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Remove</button>
+                    </div>
+                </div>
+            `);
+            
+            waypoints.push(waypoint);
+            updateStatus(`Waypoint ${waypoints.length} added`, 'success');
+            hideContextMenu();
+        }
+        
+        function removeWaypoint(index) {
+            if (waypoints[index]) {
+                map.removeLayer(waypoints[index]);
+                waypoints.splice(index, 1);
+                updateStatus('Waypoint removed', 'success');
+            }
+        }
+        
+        function measureFromHere() {
+            if (measurementLine) {
+                map.removeLayer(measurementLine);
+            }
+            
+            measurementStart = [contextMenuData.lat, contextMenuData.lng];
+            
+            const startMarker = L.marker(measurementStart, {
+                icon: L.divIcon({
+                    html: '📏',
+                    className: 'measurement-marker',
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
+                })
+            }).addTo(map);
+            
+            updateStatus('Click another point to measure distance', 'loading');
+            
+            // Listen for next click to complete measurement
+            map.once('click', function(e) {
+                const endPoint = [e.latlng.lat, e.latlng.lng];
+                const distance = map.distance(measurementStart, endPoint);
+                
+                measurementLine = L.polyline([measurementStart, endPoint], {
+                    color: '#ff4500',
+                    weight: 3,
+                    dashArray: '10, 10'
+                }).addTo(map);
+                
+                const endMarker = L.marker(endPoint, {
+                    icon: L.divIcon({
+                        html: '🎯',
+                        className: 'measurement-marker',
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                    })
+                }).addTo(map);
+                
+                const distanceText = distance < 1000 ? 
+                    `${distance.toFixed(0)}m` : 
+                    `${(distance/1000).toFixed(2)}km`;
+                
+                updateStatus(`Distance: ${distanceText}`, 'success');
+                
+                // Clean up markers after 10 seconds
+                setTimeout(() => {
+                    map.removeLayer(startMarker);
+                    map.removeLayer(endMarker);
+                    if (measurementLine) map.removeLayer(measurementLine);
+                }, 10000);
+            });
+            
+            hideContextMenu();
+        }
+        
+        function centerMapHere() {
+            map.setView([contextMenuData.lat, contextMenuData.lng], Math.max(map.getZoom(), 15));
+            updateStatus('Map centered', 'success');
+            hideContextMenu();
+        }
+        
+        function searchNearby() {
+            const coords = `${contextMenuData.lat.toFixed(4)}, ${contextMenuData.lng.toFixed(4)}`;
+            document.getElementById('search-input').value = coords;
+            performSearch(coords);
+            hideContextMenu();
+        }
+        
+        function registerRfidLocation() {
+            hideContextMenu();
+            
+            const rfidId = prompt('Enter RFID number (1-50):');
+            
+            if (rfidId === null) {
+                // User cancelled
+                return;
+            }
+            
+            const rfidNumber = parseInt(rfidId);
+            
+            // Validate input
+            if (isNaN(rfidNumber) || rfidNumber < 1 || rfidNumber > 50) {
+                updateStatus('Invalid RFID number. Please enter a number between 1-50.', 'error');
+                return;
+            }
+            
+            // Check if RFID already exists
+            if (rfidLocations.has(rfidNumber)) {
+                const confirmOverwrite = confirm(`RFID #${rfidNumber} already exists at this location. Overwrite?`);
+                if (!confirmOverwrite) {
+                    return;
+                }
+            }
+            
+            // Create the RFID location object
+            const rfidLocation = {
+                lat: contextMenuData.lat,
+                lng: contextMenuData.lng,
+                confirmed: true, // Manual registration is always confirmed
+                guessCount: 1, // Mark as manually registered
+                rfidId: rfidNumber,
+                manuallyRegistered: true
+            };
+            
+            // Add to our locations map
+            rfidLocations.set(rfidNumber, rfidLocation);
+            
+            // Save to cache
+            saveRfidCache();
+            
+            // If RFID locations are currently being shown, update the display
+            if (rfidMarkers.length > 0) {
+                displayRfidLocations();
+            }
+            
+            // Center map on the new RFID location and show it
+            map.setView([contextMenuData.lat, contextMenuData.lng], Math.max(map.getZoom(), 16));
+            
+            updateStatus(`RFID #${rfidNumber} registered successfully!`, 'success');
+        }
+        
+        // Update status message
+        function updateStatus(message, type = 'loading') {
+            const statusEl = document.getElementById('status');
+            statusEl.innerHTML = `<span class="${type}">${message}</span>`;
+        }
+        
+        // Search functionality
+        let searchTimeout;
+        
+        function handleSearch() {
+            const query = document.getElementById('search-input').value.trim();
+            const resultsEl = document.getElementById('search-results');
+            
+            // Clear previous timeout
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            
+            if (query.length < 2) {
+                resultsEl.innerHTML = '';
+                return;
+            }
+            
+            // Debounce search
+            searchTimeout = setTimeout(() => {
+                performSearch(query);
+            }, 300);
+        }
+        
+        async function performSearch(query) {
+            const resultsEl = document.getElementById('search-results');
+            resultsEl.innerHTML = '<div style="color: #888; padding: 8px;">Searching...</div>';
+            
+            const results = [];
+            
+            // Search contestants
+            const contestantMatches = contestants.filter(contestant => 
+                contestant[1].toLowerCase().includes(query.toLowerCase()) // displayName
+            ).slice(0, 5); // Limit to top 5
+            
+            contestantMatches.forEach(contestant => {
+                const [kickUser, displayName, lat, lng, points, rfids] = contestant;
+                results.push({
+                    type: 'live_streamer',
+                    name: displayName,
+                    details: `${points.toLocaleString()} pts • ${rfids} RFIDs`,
+                    lat: lat,
+                    lng: lng
+                });
+            });
+            
+            // Search RFID locations by number
+            const rfidNumber = parseInt(query);
+            if (!isNaN(rfidNumber) && rfidNumber > 0 && rfidNumber <= 50) {
+                const rfidLocation = rfidLocations.get(rfidNumber);
+                if (rfidLocation) {
+                    results.push({
+                        type: 'rfid',
+                        name: `RFID #${rfidNumber}`,
+                        details: `${rfidLocation.confirmed ? 'Confirmed' : 'Estimated'} location • ${rfidLocation.guessCount} guesses`,
+                        lat: rfidLocation.lat,
+                        lng: rfidLocation.lng
+                    });
+                } else if (rfidLocations.size > 0) {
+                    // Offer to search for this RFID if we have other RFIDs but not this one
+                    results.push({
+                        type: 'rfid_search',
+                        name: `Search for RFID #${rfidNumber}`,
+                        details: 'Click to discover location from viewer guesses',
+                        lat: null,
+                        lng: null,
+                        rfidId: rfidNumber
+                    });
+                }
+            }
+            
+            // Search places using Nominatim (OpenStreetMap geocoding)
+            try {
+                if (query.length > 3) { // Only search places for longer queries
+                    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=3&q=${encodeURIComponent(query + ' Austin Texas')}`);
+                    const places = await response.json();
+                    
+                    places.forEach(place => {
+                        // Only show places within Austin area
+                        const lat = parseFloat(place.lat);
+                        const lng = parseFloat(place.lon);
+                        if (lat >= 30.0 && lat <= 30.9 && lng >= -98.2 && lng <= -97.1) {
+                            results.push({
+                                type: 'place',
+                                name: place.display_name.split(',')[0], // Just the main part
+                                details: `📍 ${place.type} in Austin`,
+                                lat: lat,
+                                lng: lng
+                            });
+                        }
+                    });
+                }
+            } catch (error) {
+                console.log('Place search failed:', error);
+            }
+            
+            // Display results
+            if (results.length === 0) {
+                resultsEl.innerHTML = '<div style="color: #888; padding: 8px;">No results found</div>';
+            } else {
+                resultsEl.innerHTML = results.map(result => {
+                    if (result.type === 'rfid_search') {
+                        return `
+                            <div class="search-result" onclick="searchSpecificRfid(${result.rfidId})">
+                                <div class="search-result-name">${result.name}</div>
+                                <div class="search-result-details">${result.details}</div>
+                            </div>
+                        `;
+                    } else {
+                        return `
+                            <div class="search-result" onclick="goToLocation(${result.lat}, ${result.lng})">
+                                <div class="search-result-name">${result.name}</div>
+                                <div class="search-result-details">${result.details}</div>
+                            </div>
+                        `;
+                    }
+                }).join('');
+            }
+        }
+        
+        function goToLocation(lat, lng) {
+            map.setView([lat, lng], 16);
+            document.getElementById('search-input').value = '';
+            document.getElementById('search-results').innerHTML = '';
+        }
+        
+        async function searchSpecificRfid(rfidId) {
+            document.getElementById('search-input').value = '';
+            document.getElementById('search-results').innerHTML = '';
+            
+            updateStatus(`Searching for RFID #${rfidId}...`, 'loading');
+            
+            try {
+                const guesses = await fetchViewerGuesses(rfidId);
+                if (guesses && guesses.length > 0) {
+                    const location = findRfidLocationFromGuesses(guesses, rfidId);
+                    if (location) {
+                        rfidLocations.set(rfidId, location);
+                        
+                        // Save to cache after discovery
+                        saveRfidCache();
+                        
+                        // Show the location on map
+                        displayRfidLocations();
+                        map.setView([location.lat, location.lng], 16);
+                        
+                        updateStatus(`Found RFID #${rfidId} location!`, 'success');
+                    } else {
+                        updateStatus(`Could not determine location for RFID #${rfidId}`, 'error');
+                    }
+                } else {
+                    updateStatus(`No viewer guesses found for RFID #${rfidId}`, 'error');
+                }
+            } catch (error) {
+                updateStatus(`Error searching for RFID #${rfidId}`, 'error');
+            }
+        }
+        
+        // Kick Channel Icon Functions
+        async function fetchKickChannelIcon(kickUsername) {
+            if (channelIcons.has(kickUsername)) {
+                return channelIcons.get(kickUsername);
+            }
+            
+            try {
+                // Try to fetch Kick channel data
+                const response = await fetch(`https://kick.com/api/v1/channels/${kickUsername}`, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const channelData = await response.json();
+                    let avatarUrl = null;
+                    
+                    // Extract profile picture URL
+                    if (channelData.user && channelData.user.profile_pic) {
+                        avatarUrl = channelData.user.profile_pic;
+                    } else if (channelData.profile_pic) {
+                        avatarUrl = channelData.profile_pic;
+                    }
+                    
+                    // Ensure HTTPS and cache result
+                    if (avatarUrl) {
+                        if (avatarUrl.startsWith('//')) {
+                            avatarUrl = 'https:' + avatarUrl;
+                        } else if (avatarUrl.startsWith('/')) {
+                            avatarUrl = 'https://kick.com' + avatarUrl;
+                        }
+                        
+                        channelIcons.set(kickUsername, avatarUrl);
+                        return avatarUrl;
+                    }
+                }
+            } catch (error) {
+                console.log(`Failed to fetch icon for ${kickUsername}:`, error);
+            }
+            
+            // Fallback: cache null to avoid repeated failed requests
+            channelIcons.set(kickUsername, null);
+            return null;
+        }
+        
+        function createProfileMarkerIcon(avatarUrl, groupSize, highestScore, gpsState, cachedCount, liveCount) {
+            const iconSize = Math.max(30, 20 + (groupSize * 3)); // Minimum 30px, scales with group
+            
+            // Border style based on GPS state
+            let borderStyle = '3px solid #00ff41';
+            if (gpsState === 'off') {
+                borderStyle = '3px dashed #ff0000';
+            } else if (cachedCount > 0 && liveCount > 0) {
+                borderStyle = '3px dotted #ff9500';
+            }
+            
+            // Background color based on score
+            let backgroundColor = '#00ff41';
+            if (highestScore > 10000) {
+                backgroundColor = '#ff4500';
+            } else if (highestScore > 1000) {
+                backgroundColor = '#ffff00';
+            }
+            
+            const html = avatarUrl ? `
+                <div style="
+                    width: ${iconSize}px; 
+                    height: ${iconSize}px; 
+                    border-radius: 50%; 
+                    border: ${borderStyle}; 
+                    background: ${backgroundColor};
+                    padding: 2px;
+                    cursor: pointer;
+                    position: relative;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                ">
+                    <img src="${avatarUrl}" 
+                         style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" 
+                         onerror="this.style.display='none'; this.parentElement.innerHTML='👤';">
+                    ${groupSize > 1 ? `<div style="
+                        position: absolute; 
+                        bottom: -5px; 
+                        right: -5px; 
+                        background: #000; 
+                        color: #fff; 
+                        border-radius: 50%; 
+                        width: 18px; 
+                        height: 18px; 
+                        display: flex; 
+                        align-items: center; 
+                        justify-content: center; 
+                        font-size: 10px; 
+                        font-weight: bold;
+                        border: 1px solid #00ff41;
+                    ">${groupSize}</div>` : ''}
+                </div>
+            ` : `
+                <div style="
+                    background: ${backgroundColor}; 
+                    border: ${borderStyle}; 
+                    border-radius: 50%; 
+                    width: ${iconSize}px; 
+                    height: ${iconSize}px; 
+                    cursor: pointer; 
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: center; 
+                    font-weight: bold; 
+                    font-size: ${Math.min(12 + groupSize, 20)}px; 
+                    color: #000;
+                ">
+                    ${groupSize > 1 ? groupSize : '👤'}
+                </div>
+            `;
+            
+            return L.divIcon({
+                html: html,
+                className: 'profile-marker',
+                iconSize: [iconSize, iconSize],
+                iconAnchor: [iconSize/2, iconSize/2]
+            });
+        }
+        
+        // Viewer Guess Analysis Engine
+        async function fetchViewerGuesses(rfidId) {
+            try {
+                const response = await fetch(`https://viewerapi.iceposeidon.com/viewer.guesses.rfid.${rfidId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.viewer_guesses || [];
+                }
+            } catch (error) {
+                console.log(`Failed to fetch guesses for RFID ${rfidId}:`, error);
+            }
+            return [];
+        }
+        
+        async function analyzeViewerGuesses() {
+            const topRfids = Math.max(...contestants.map(c => c[5]), 0);
+            const currentRfid = Math.min(topRfids + 1, 50);
+            
+            // Fetch guesses for current and recent RFIDs
+            const rfidsToAnalyze = [currentRfid, Math.max(1, currentRfid - 1), Math.max(1, currentRfid - 2)];
+            const allGuesses = [];
+            
+            for (const rfidId of rfidsToAnalyze) {
+                const guesses = await fetchViewerGuesses(rfidId);
+                guesses.forEach(guess => {
+                    allGuesses.push({
+                        rfid: rfidId,
+                        username: guess[0],
+                        lat: guess[1],
+                        lng: guess[2],
+                        timestamp: new Date(guess[3])
+                    });
+                });
+            }
+            
+            // Proximity Analysis - find guess clusters
+            const hotZones = findGuessHotZones(allGuesses);
+            
+            // Time Analysis - recent guess velocity
+            const recentGuesses = allGuesses.filter(g => 
+                (Date.now() - g.timestamp.getTime()) < 3600000 // Last hour
+            );
+            
+            guessAnalysis = {
+                hotZones,
+                recentGuesses,
+                totalGuesses: allGuesses.length,
+                currentRfid
+            };
+            
+            console.log('Guess Analysis:', guessAnalysis);
+            return guessAnalysis;
+        }
+        
+        function findGuessHotZones(guesses) {
+            const zones = [];
+            const processed = new Set();
+            const CLUSTER_DISTANCE = 0.001; // ~100 meters
+            
+            guesses.forEach((guess, i) => {
+                if (processed.has(i)) return;
+                
+                const cluster = [guess];
+                processed.add(i);
+                
+                // Find nearby guesses
+                guesses.forEach((otherGuess, j) => {
+                    if (i !== j && !processed.has(j)) {
+                        const distance = Math.sqrt(
+                            Math.pow(guess.lat - otherGuess.lat, 2) + 
+                            Math.pow(guess.lng - otherGuess.lng, 2)
+                        );
+                        
+                        if (distance < CLUSTER_DISTANCE) {
+                            cluster.push(otherGuess);
+                            processed.add(j);
+                        }
+                    }
+                });
+                
+                if (cluster.length >= 3) { // Minimum 3 guesses to be a "hot zone"
+                    const centerLat = cluster.reduce((sum, g) => sum + g.lat, 0) / cluster.length;
+                    const centerLng = cluster.reduce((sum, g) => sum + g.lng, 0) / cluster.length;
+                    
+                    zones.push({
+                        lat: centerLat,
+                        lng: centerLng,
+                        count: cluster.length,
+                        rfids: [...new Set(cluster.map(g => g.rfid))],
+                        recentActivity: cluster.filter(g => 
+                            (Date.now() - g.timestamp.getTime()) < 1800000 // Last 30 minutes
+                        ).length
+                    });
+                }
+            });
+            
+            return zones.sort((a, b) => b.count - a.count);
+        }
+        
+        // Guess Analysis UI
+        let showGuessAnalysis = false;
+        let guessMarkers = [];
+        let rfidMarkers = [];
+        let rfidLocations = new Map(); // Map of RFID ID to {lat, lng, confirmed, guessCount}
+        
+        function toggleGuessAnalysis() {
+            showGuessAnalysis = !showGuessAnalysis;
+            const btn = event.target;
+            
+            if (showGuessAnalysis) {
+                btn.textContent = 'Guess Analysis: ON';
+                btn.style.background = '#ff9500';
+                analyzeViewerGuesses().then(displayGuessHotZones);
+            } else {
+                btn.textContent = 'Guess Analysis: OFF';
+                btn.style.background = '#00ff41';
+                clearGuessMarkers();
+            }
+        }
+        
+        function clearGuessMarkers() {
+            guessMarkers.forEach(marker => map.removeLayer(marker));
+            guessMarkers = [];
+            hideHotZoneAlert(); // Hide alert when clearing all markers
+        }
+        
+        // Hot zone alert management
+        let currentAlertZone = null;
+        
+        // RFID Location Management with localStorage caching
+        const RFID_CACHE_KEY = 'teamdarius_rfid_locations';
+        const RFID_CACHE_EXPIRY = 'teamdarius_rfid_cache_time';
+        const CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+        
+        function loadRfidCache() {
+            try {
+                const cacheTime = localStorage.getItem(RFID_CACHE_EXPIRY);
+                const cachedData = localStorage.getItem(RFID_CACHE_KEY);
+                
+                if (cacheTime && cachedData) {
+                    const timeDiff = Date.now() - parseInt(cacheTime);
+                    if (timeDiff < CACHE_DURATION) {
+                        // Cache is still valid
+                        const locationData = JSON.parse(cachedData);
+                        locationData.forEach(([rfidId, location]) => {
+                            rfidLocations.set(rfidId, location);
+                        });
+                        console.log(`Loaded ${rfidLocations.size} RFID locations from cache`);
+                        return true;
+                    }
+                }
+            } catch (error) {
+                console.log('Error loading RFID cache:', error);
+            }
+            return false;
+        }
+        
+        function saveRfidCache() {
+            try {
+                const locationData = Array.from(rfidLocations.entries());
+                localStorage.setItem(RFID_CACHE_KEY, JSON.stringify(locationData));
+                localStorage.setItem(RFID_CACHE_EXPIRY, Date.now().toString());
+                console.log(`Saved ${rfidLocations.size} RFID locations to cache`);
+            } catch (error) {
+                console.log('Error saving RFID cache:', error);
+            }
+        }
+        
+        async function discoverRfidLocations(forceRefresh = false) {
+            // Try to load from cache first unless forcing refresh
+            if (!forceRefresh && loadRfidCache()) {
+                displayRfidLocations();
+                return;
+            }
+            
+            console.log('Discovering RFID locations from viewer guesses...');
+            const originalSize = rfidLocations.size;
+            
+            // Check RFIDs 1-50 (adjust range as needed)
+            for (let rfidId = 1; rfidId <= 50; rfidId++) {
+                // Skip if we already have this RFID and not forcing refresh
+                if (!forceRefresh && rfidLocations.has(rfidId)) {
+                    continue;
+                }
+                
+                try {
+                    const guesses = await fetchViewerGuesses(rfidId);
+                    if (guesses && guesses.length > 0) {
+                        // Cluster guesses to find the most likely RFID location
+                        const location = findRfidLocationFromGuesses(guesses, rfidId);
+                        if (location) {
+                            rfidLocations.set(rfidId, location);
+                        }
+                    }
+                    // Small delay to avoid overwhelming the API
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                } catch (error) {
+                    // Silent fail for individual RFID lookups
+                    console.log(`No data for RFID ${rfidId}`);
+                }
+            }
+            
+            const newLocations = rfidLocations.size - originalSize;
+            console.log(`Discovered ${newLocations} new RFID locations (${rfidLocations.size} total)`);
+            
+            // Save to cache after discovery
+            saveRfidCache();
+            displayRfidLocations();
+        }
+        
+        function findRfidLocationFromGuesses(guesses, rfidId) {
+            if (!guesses || guesses.length === 0) return null;
+            
+            // Group guesses by proximity (within ~50 meters)
+            const clusters = [];
+            const proximityThreshold = 0.0005; // roughly 50 meters in degrees
+            
+            guesses.forEach(guess => {
+                const lat = parseFloat(guess[0]);
+                const lng = parseFloat(guess[1]);
+                
+                if (isNaN(lat) || isNaN(lng)) return;
+                
+                // Find existing cluster within threshold
+                let foundCluster = clusters.find(cluster => {
+                    const distance = Math.sqrt(
+                        Math.pow(cluster.centerLat - lat, 2) + 
+                        Math.pow(cluster.centerLng - lng, 2)
+                    );
+                    return distance < proximityThreshold;
+                });
+                
+                if (foundCluster) {
+                    foundCluster.guesses.push([lat, lng]);
+                    // Update center (weighted average)
+                    const totalGuesses = foundCluster.guesses.length;
+                    foundCluster.centerLat = foundCluster.guesses.reduce((sum, g) => sum + g[0], 0) / totalGuesses;
+                    foundCluster.centerLng = foundCluster.guesses.reduce((sum, g) => sum + g[1], 0) / totalGuesses;
+                } else {
+                    clusters.push({
+                        centerLat: lat,
+                        centerLng: lng,
+                        guesses: [[lat, lng]]
+                    });
+                }
+            });
+            
+            if (clusters.length === 0) return null;
+            
+            // Return the cluster with the most guesses (most confident location)
+            const bestCluster = clusters.reduce((max, cluster) => 
+                cluster.guesses.length > max.guesses.length ? cluster : max
+            );
+            
+            // Only consider it confirmed if there are multiple guesses clustered together
+            const confirmed = bestCluster.guesses.length >= 3;
+            
+            return {
+                lat: bestCluster.centerLat,
+                lng: bestCluster.centerLng,
+                confirmed: confirmed,
+                guessCount: bestCluster.guesses.length,
+                rfidId: rfidId
+            };
+        }
+        
+        function showHotZoneAlert(zone) {
+            const alert = document.getElementById('hotzone-alert');
+            const alertText = document.getElementById('alert-text');
+            
+            currentAlertZone = zone;
+            alertText.textContent = `🔥 HOT ZONE: ${zone.recentActivity} recent guesses - CLICK TO VIEW!`;
+            
+            // Show the alert
+            alert.style.display = 'block';
+            
+            // Add click handler to center map on hot zone
+            alert.onclick = () => {
+                map.setView([zone.lat, zone.lng], Math.max(map.getZoom(), 16));
+                // Optional: Open popup for the zone marker
+                const hotZoneMarker = guessMarkers.find(marker => {
+                    const pos = marker.getLatLng();
+                    return Math.abs(pos.lat - zone.lat) < 0.001 && Math.abs(pos.lng - zone.lng) < 0.001;
+                });
+                if (hotZoneMarker) {
+                    hotZoneMarker.openPopup();
+                }
+            };
+        }
+        
+        function hideHotZoneAlert() {
+            const alert = document.getElementById('hotzone-alert');
+            alert.style.display = 'none';
+            currentAlertZone = null;
+        }
+        
+        function displayRfidLocations() {
+            // Clear existing RFID markers
+            clearRfidMarkers();
+            
+            rfidLocations.forEach((location, rfidId) => {
+                const confirmedIcon = L.divIcon({
+                    html: `
+                        <div style="
+                            background: ${location.manuallyRegistered ? '#2196F3' : (location.confirmed ? '#4CAF50' : '#FF9800')}; 
+                            border: 3px solid #fff; 
+                            border-radius: 15px; 
+                            width: 30px; 
+                            height: 30px; 
+                            display: flex; 
+                            align-items: center; 
+                            justify-content: center; 
+                            font-weight: bold; 
+                            font-size: 12px; 
+                            color: #fff;
+                            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+                        ">
+                            ${rfidId}
+                        </div>
+                    `,
+                    className: 'rfid-location-marker',
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+                
+                const popupContent = `
+                    <div class="popup-content">
+                        <div class="popup-name">📍 RFID Location #${rfidId}</div>
+                        <div class="popup-stats">
+                            <div>Status: ${location.manuallyRegistered ? 'Manually Registered' : (location.confirmed ? 'Confirmed' : 'Estimated')}</div>
+                            <div>${location.manuallyRegistered ? 'Manually added by user' : `Based on ${location.guessCount} viewer guesses`}</div>
+                            <div>Coordinates: ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}</div>
+                        </div>
+                    </div>
+                `;
+                
+                const marker = L.marker([location.lat, location.lng], { 
+                    icon: confirmedIcon,
+                    pane: 'markerPane'
+                })
+                    .bindPopup(popupContent)
+                    .addTo(map);
+                
+                rfidMarkers.push(marker);
+            });
+        }
+        
+        function clearRfidMarkers() {
+            rfidMarkers.forEach(marker => map.removeLayer(marker));
+            rfidMarkers = [];
+        }
+        
+        function toggleRfidLocations() {
+            const btn = event.target;
+            const refreshBtn = document.getElementById('refresh-rfid-btn');
+            
+            if (rfidMarkers.length > 0) {
+                // Hide RFID locations
+                clearRfidMarkers();
+                btn.textContent = 'Show RFID Locations';
+                refreshBtn.style.display = 'none';
+            } else {
+                // Show RFID locations
+                if (rfidLocations.size === 0) {
+                    updateStatus('Loading RFID locations...', 'loading');
+                    discoverRfidLocations().then(() => {
+                        const message = rfidLocations.size > 0 ? 
+                            `Loaded ${rfidLocations.size} RFID locations from ${loadRfidCache() ? 'cache' : 'live data'}` :
+                            'No RFID locations found yet';
+                        updateStatus(message, rfidLocations.size > 0 ? 'success' : 'loading');
+                    });
+                } else {
+                    displayRfidLocations();
+                }
+                btn.textContent = 'Hide RFID Locations';
+                refreshBtn.style.display = 'inline-block';
+            }
+        }
+        
+        async function refreshRfidData() {
+            updateStatus('Refreshing RFID locations...', 'loading');
+            
+            try {
+                await discoverRfidLocations(true); // Force refresh
+                const message = `Refreshed! Found ${rfidLocations.size} RFID locations`;
+                updateStatus(message, 'success');
+            } catch (error) {
+                updateStatus('Error refreshing RFID data', 'error');
+            }
+        }
+        
+        function clearRfidCache() {
+            try {
+                localStorage.removeItem(RFID_CACHE_KEY);
+                localStorage.removeItem(RFID_CACHE_EXPIRY);
+                rfidLocations.clear();
+                clearRfidMarkers();
+                console.log('RFID cache cleared');
+            } catch (error) {
+                console.log('Error clearing RFID cache:', error);
+            }
+        }
+        
+        function displayGuessHotZones() {
+            clearGuessMarkers();
+            
+            // Check for definitive hot zones (>10 recent activity) to show alert
+            const definitiveZones = guessAnalysis.hotZones.filter(zone => zone.recentActivity > 10);
+            
+            if (definitiveZones.length > 0) {
+                // Show alert for the most active zone
+                const mostActiveZone = definitiveZones.reduce((max, zone) => 
+                    zone.recentActivity > max.recentActivity ? zone : max
+                );
+                showHotZoneAlert(mostActiveZone);
+            } else {
+                hideHotZoneAlert();
+            }
+            
+            guessAnalysis.hotZones.forEach(zone => {
+                // Create hot zone marker with enhanced visibility
+                const heatColor = zone.recentActivity > 5 ? '#ff4500' : '#ffff00';
+                const isDefinitive = zone.recentActivity > 10;
+                const blinkAnimation = isDefinitive ? 'animation: blink 1.5s infinite;' : '';
+                const pulseAnimation = zone.recentActivity > 5 ? 'animation: pulse 2s infinite;' : '';
+                const animation = isDefinitive ? blinkAnimation : pulseAnimation;
+                
+                const hotZoneIcon = L.divIcon({
+                    html: `
+                        <div style="
+                            background: ${heatColor}; 
+                            border: 4px solid #fff; 
+                            border-radius: 50%; 
+                            width: ${isDefinitive ? 40 : 30}px; 
+                            height: ${isDefinitive ? 40 : 30}px; 
+                            display: flex; 
+                            align-items: center; 
+                            justify-content: center; 
+                            font-weight: bold; 
+                            font-size: ${isDefinitive ? 20 : 16}px; 
+                            color: #000;
+                            box-shadow: 0 0 15px rgba(255, 69, 0, 0.8);
+                            z-index: 1000;
+                            position: relative;
+                            ${animation}
+                        ">
+                            🔥
+                        </div>
+                    `,
+                    className: 'guess-hotzone-marker priority-marker',
+                    iconSize: [isDefinitive ? 40 : 30, isDefinitive ? 40 : 30],
+                    iconAnchor: [isDefinitive ? 20 : 15, isDefinitive ? 20 : 15]
+                });
+                
+                const popupContent = `
+                    <div class="popup-content">
+                        <div class="popup-name">🔥 Guess Hot Zone</div>
+                        <div class="popup-stats">
+                            <div>Total Guesses: ${zone.count}</div>
+                            <div>Recent Activity: ${zone.recentActivity} (30min)</div>
+                            <div>RFIDs: ${zone.rfids.join(', ')}</div>
+                            <div>Coordinates: ${zone.lat.toFixed(4)}, ${zone.lng.toFixed(4)}</div>
+                        </div>
+                    </div>
+                `;
+                
+                const marker = L.marker([zone.lat, zone.lng], { 
+                    icon: hotZoneIcon,
+                    pane: 'overlayPane'
+                })
+                    .bindPopup(popupContent)
+                    .addTo(map);
+                
+                // Ensure high z-index for definitive hot zones
+                if (isDefinitive) {
+                    setTimeout(() => {
+                        const markerElement = marker.getElement();
+                        if (markerElement) {
+                            markerElement.style.zIndex = '1000';
+                        }
+                    }, 10);
+                }
+                    
+                guessMarkers.push(marker);
+            });
+            
+            updateStatus(`Found ${guessAnalysis.hotZones.length} guess hot zones`, 'success');
+        }
+        
+        // Initialize everything
+        document.addEventListener('DOMContentLoaded', () => {
+            initMap();
+        });
+    </script>
+</body>
+</html>
