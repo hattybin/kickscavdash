@@ -162,8 +162,8 @@
             border-radius: 8px;
             overflow: hidden;
             z-index: 1000;
-            width: 330px;  /* 50% bigger: 220px -> 330px */
-            height: 215px; /* 50% bigger: 143px -> 215px */
+            width: 330px !important;  /* 50% bigger: 220px -> 330px */
+            height: 215px !important; /* 50% bigger: 143px -> 215px */
             min-width: 200px;
             min-height: 130px;
             resize: both;
@@ -3170,8 +3170,9 @@
             });
             
             // Force correct size (override any conflicting styles)
-            panel.style.width = '330px';
-            panel.style.height = '215px';
+            panel.style.setProperty('width', '330px', 'important');
+            panel.style.setProperty('height', '215px', 'important');
+            console.log('Panel created with size:', panel.style.width, panel.style.height, 'offsetWidth:', panel.offsetWidth, 'offsetHeight:', panel.offsetHeight);
             
             panel.innerHTML = `
                 <div class="video-panel-header">
