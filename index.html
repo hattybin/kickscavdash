@@ -589,6 +589,12 @@
 
                 if (error) throw error;
                 
+                // Log the RFID registration activity
+                await logActivity('rfid_discovered', location.discoveredByUser, location.discoveredBy, rfidNumber, {
+                    method: dbLocation.discovery_method,
+                    coordinates: [location.lat, location.lng]
+                });
+                
                 console.log(`Saved RFID #${rfidNumber} to database`);
                 return true;
             } catch (error) {
@@ -626,6 +632,28 @@
             } catch (error) {
                 console.error('Error updating contestant positions:', error);
                 return false;
+            }
+        }
+        
+        // Log activity for tracking
+        async function logActivity(type, username, displayName, rfidNumber = null, details = {}) {
+            if (!databaseEnabled) return;
+            
+            try {
+                const { error } = await supabase
+                    .from('activity_log')
+                    .insert([{
+                        activity_type: type,
+                        kick_username: username,
+                        display_name: displayName,
+                        rfid_number: rfidNumber,
+                        details: details
+                    }]);
+
+                if (error) throw error;
+                console.log(`Logged activity: ${type}`);
+            } catch (error) {
+                console.error('Error logging activity:', error);
             }
         }
         
@@ -780,6 +808,13 @@
                         '📍 GPS tracking disabled by Ice' : 
                         '📍 GPS tracking enabled by Ice';
                     updateStatus(message, currentGpsState === 'off' ? 'error' : 'success');
+                    
+                    // Log GPS state change
+                    logActivity('gps_state_change', 'system', 'Ice Poseidon', null, {
+                        previous_state: previousState,
+                        new_state: currentGpsState,
+                        timestamp: new Date().toISOString()
+                    });
                 }
             }
         }
@@ -819,6 +854,14 @@
                         lastRfidCount: rfids,
                         totalScans: rfids,
                         firstSeen: currentTime
+                    });
+                    
+                    // Log new contestant discovery
+                    logActivity('new_contestant', kickUser, displayName, null, {
+                        points: points,
+                        rfid_count: rfids,
+                        coordinates: [lat, lng],
+                        first_seen: currentTime.toISOString()
                     });
                 }
             });
