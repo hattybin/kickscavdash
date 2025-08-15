@@ -597,6 +597,40 @@
             }
         }
         
+        async function updateContestantPositionsInDB(contestants) {
+            if (!databaseEnabled) return false;
+            
+            try {
+                const dbContestants = contestants.map(contestant => {
+                    const [kickUser, displayName, lat, lng, points, rfids, isCached] = contestant;
+                    return {
+                        kick_username: kickUser,
+                        display_name: displayName,
+                        lat: parseFloat(lat),
+                        lng: parseFloat(lng),
+                        points: parseInt(points),
+                        rfid_count: parseInt(rfids),
+                        is_cached: Boolean(isCached),
+                        gps_state: gpsState
+                    };
+                });
+
+                const { data, error } = await supabase
+                    .from('contestant_positions')
+                    .upsert(dbContestants, { 
+                        onConflict: 'kick_username',
+                        ignoreDuplicates: false 
+                    });
+
+                if (error) throw error;
+                console.log(`Updated ${dbContestants.length} contestant positions in database`);
+                return true;
+            } catch (error) {
+                console.error('Error updating contestant positions:', error);
+                return false;
+            }
+        }
+        
         function setupRealtimeSubscriptions() {
             if (!databaseEnabled) return;
             
