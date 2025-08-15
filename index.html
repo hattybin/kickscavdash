@@ -951,6 +951,11 @@
                 updateStats();
                 updateContestantList();
                 
+                // Save contestant positions to database
+                if (databaseEnabled && contestants.length > 0) {
+                    updateContestantPositionsInDB(contestants);
+                }
+                
                 // Update status with GPS state info
                 const statusMsg = displayInfo.isLive ? 
                     `Loaded ${contestants.length} live streamers (GPS ON)` :
