@@ -110,4 +110,4 @@ npx serve .
 
 🌐 **https://hattybin.github.io/kickscavdash/**
 
-Built for the Ice Poseidon Kick.com scavenger hunt community 🎯
+Built for the Ice Poseidon Kick.com scavenger hunt event brought to you by Stake. Gambling is an investment, you will win!🎯
