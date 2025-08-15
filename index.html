@@ -162,8 +162,8 @@
             border-radius: 8px;
             overflow: hidden;
             z-index: 1000;
-            width: 330px !important;  /* 50% bigger: 220px -> 330px */
-            height: 215px !important; /* 50% bigger: 143px -> 215px */
+            width: 413px !important;  /* 25% bigger: 330px -> 413px */
+            height: 269px !important; /* 25% bigger: 215px -> 269px */
             min-width: 200px;
             min-height: 130px;
             resize: both;
@@ -3113,8 +3113,8 @@
         // Smart positioning that avoids existing UI elements
         // UI boundaries: info-panel (top-right), controls (left), overlay (bottom-left), etc.
         function calculateSafePositions() {
-            const panelWidth = 330;  // Updated to match CSS
-            const panelHeight = 215; // Updated to match CSS  
+            const panelWidth = 413;  // Updated to match CSS
+            const panelHeight = 269; // Updated to match CSS  
             const gap = 10;
             
             return [
@@ -3170,8 +3170,8 @@
             });
             
             // Force correct size (override any conflicting styles)
-            panel.style.setProperty('width', '330px', 'important');
-            panel.style.setProperty('height', '215px', 'important');
+            panel.style.setProperty('width', '413px', 'important');
+            panel.style.setProperty('height', '269px', 'important');
             console.log('Panel created with size:', panel.style.width, panel.style.height, 'offsetWidth:', panel.offsetWidth, 'offsetHeight:', panel.offsetHeight);
             
             panel.innerHTML = `
@@ -3297,7 +3297,19 @@
             let startSize = { width: 0, height: 0 };
             let startPos = { x: 0, y: 0 };
             
+            // Test if handle receives events
+            handle.addEventListener('mouseenter', () => {
+                console.log('Resize handle mouse enter');
+                handle.style.background = '#ff4444';
+            });
+            
+            handle.addEventListener('mouseleave', () => {
+                console.log('Resize handle mouse leave');
+                handle.style.background = '#ff0000';
+            });
+            
             handle.addEventListener('mousedown', (e) => {
+                console.log('Resize handle mousedown triggered');
                 isResizing = true;
                 startSize.width = panel.offsetWidth;
                 startSize.height = panel.offsetHeight;
@@ -3319,8 +3331,9 @@
                 const newWidth = Math.max(200, startSize.width + deltaX);
                 const newHeight = Math.max(130, startSize.height + deltaY);
                 
-                panel.style.width = newWidth + 'px';
-                panel.style.height = newHeight + 'px';
+                console.log('Resizing to:', newWidth, 'x', newHeight);
+                panel.style.setProperty('width', newWidth + 'px', 'important');
+                panel.style.setProperty('height', newHeight + 'px', 'important');
             }
             
             function stopResize() {
