@@ -123,6 +123,38 @@
             background: #00cc35;
         }
         
+        .refresh-control {
+            position: absolute;
+            top: 20px;
+            right: 10%;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 2px solid #00ff41;
+            z-index: 1000;
+        }
+        
+        .refresh-control label {
+            color: #00ff41;
+            font-size: 12px;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        
+        .refresh-control select {
+            background: #000;
+            color: #00ff41;
+            border: 1px solid #00ff41;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+        
+        .refresh-control select:focus {
+            outline: none;
+            border-color: #00cc35;
+        }
+        
         .status {
             position: absolute;
             bottom: 10px;
@@ -412,6 +444,18 @@
         <div class="context-menu-item" onclick="measureFromHere()">📏 Measure Distance</div>
         <div class="context-menu-item" onclick="centerMapHere()">🎯 Center Map Here</div>
         <div class="context-menu-item" onclick="searchNearby()">🔍 Search Nearby</div>
+    </div>
+    
+    <div class="refresh-control">
+        <label for="refresh-rate">Refresh:</label>
+        <select id="refresh-rate" onchange="updateRefreshRate()">
+            <option value="5">5 sec</option>
+            <option value="15">15 sec</option>
+            <option value="30">30 sec</option>
+            <option value="60">1 min</option>
+            <option value="300">5 min</option>
+            <option value="0">Off</option>
+        </select>
     </div>
     
     <div class="controls">
@@ -743,9 +787,9 @@
             
             loadContestants();
             
-            // Start auto-refresh
-            if (autoRefresh) {
-                refreshInterval = setInterval(loadContestants, 5000); // Every 5 seconds
+            // Start auto-refresh with current rate
+            if (autoRefresh && currentRefreshRate > 0) {
+                refreshInterval = setInterval(loadContestants, currentRefreshRate * 1000);
             }
         }
         
@@ -1334,16 +1378,42 @@
         }
         
         // Toggle auto-refresh
-        function toggleAutoRefresh() {
-            autoRefresh = !autoRefresh;
-            const btn = event.target;
+        let currentRefreshRate = 5; // Default 5 seconds
+        
+        function updateRefreshRate() {
+            const select = document.getElementById('refresh-rate');
+            const newRate = parseInt(select.value);
+            currentRefreshRate = newRate;
             
-            if (autoRefresh) {
-                btn.textContent = 'Auto Refresh: ON';
-                refreshInterval = setInterval(loadContestants, 5000);
-            } else {
-                btn.textContent = 'Auto Refresh: OFF';
+            // Clear existing interval
+            if (refreshInterval) {
                 clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+            
+            // Update auto refresh button
+            const autoRefreshBtn = document.querySelector('.controls button');
+            if (newRate === 0) {
+                autoRefresh = false;
+                autoRefreshBtn.textContent = 'Auto Refresh: OFF';
+            } else {
+                autoRefresh = true;
+                autoRefreshBtn.textContent = `Auto Refresh: ON (${newRate < 60 ? newRate + 's' : Math.floor(newRate/60) + 'm'})`;
+                refreshInterval = setInterval(loadContestants, newRate * 1000);
+            }
+        }
+        
+        function toggleAutoRefresh() {
+            const select = document.getElementById('refresh-rate');
+            
+            if (autoRefresh && currentRefreshRate > 0) {
+                // Turn off
+                select.value = '0';
+                updateRefreshRate();
+            } else {
+                // Turn on with default rate
+                select.value = '5';
+                updateRefreshRate();
             }
         }
         
