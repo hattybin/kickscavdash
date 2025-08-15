@@ -615,9 +615,18 @@
         function trackContestantActivity(contestants) {
             const currentTime = Date.now();
             
+            // Find the current highest RFID count across all contestants
+            const currentMaxRfids = Math.max(...contestants.map(c => c[5]), 0);
+            
             contestants.forEach(contestant => {
                 const [kickUser, displayName, lat, lng, points, rfids] = contestant;
                 const key = kickUser;
+                
+                // Auto-register RFID location if someone reached a new high RFID count
+                if (rfids > highestRfidSeen && rfids === currentMaxRfids) {
+                    autoRegisterRfidLocation(rfids, lat, lng, displayName, kickUser);
+                    highestRfidSeen = rfids;
+                }
                 
                 if (contestantActivity.has(key)) {
                     const activity = contestantActivity.get(key);
@@ -639,6 +648,63 @@
                     });
                 }
             });
+        }
+        
+        function autoRegisterRfidLocation(rfidNumber, lat, lng, discovererName, kickUser) {
+            // Don't register if coordinates are invalid or at fallback location
+            const FALLBACK_COORDS = [30.24753599760347, -97.71820629756418];
+            const GPS_OFF_THRESHOLD = 0.0001;
+            
+            if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+                console.log(`Invalid coordinates for RFID #${rfidNumber} auto-registration`);
+                return;
+            }
+            
+            // Skip if at fallback coordinates (GPS off)
+            if (Math.abs(lat - FALLBACK_COORDS[0]) < GPS_OFF_THRESHOLD && 
+                Math.abs(lng - FALLBACK_COORDS[1]) < GPS_OFF_THRESHOLD) {
+                console.log(`Skipping RFID #${rfidNumber} auto-registration - GPS appears to be off`);
+                return;
+            }
+            
+            // Skip if RFID already exists (unless this is more recent)
+            if (rfidLocations.has(rfidNumber)) {
+                const existing = rfidLocations.get(rfidNumber);
+                if (existing.autoRegistered) {
+                    // Update if this is from a different location (RFIDs can move?)
+                    const distance = Math.sqrt(Math.pow(existing.lat - lat, 2) + Math.pow(existing.lng - lng, 2));
+                    if (distance < 0.001) { // Within ~100m, consider it the same location
+                        return;
+                    }
+                }
+            }
+            
+            // Create auto-registered RFID location
+            const rfidLocation = {
+                lat: lat,
+                lng: lng,
+                confirmed: true,
+                guessCount: 1,
+                rfidId: rfidNumber,
+                autoRegistered: true,
+                discoveredBy: discovererName,
+                discoveredByUser: kickUser,
+                discoveredAt: new Date().toISOString()
+            };
+            
+            rfidLocations.set(rfidNumber, rfidLocation);
+            
+            // Save to cache
+            saveRfidCache();
+            
+            // Update display if RFID markers are shown
+            if (rfidMarkers.length > 0) {
+                displayRfidLocations();
+            }
+            
+            // Show notification
+            console.log(`🎯 Auto-registered RFID #${rfidNumber} discovered by ${discovererName} at ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+            updateStatus(`🎯 RFID #${rfidNumber} auto-registered! Discovered by ${discovererName}`, 'success');
         }
         
         function getContestantActivityStatus(kickUser) {
@@ -1743,6 +1809,7 @@
         let guessMarkers = [];
         let rfidMarkers = [];
         let rfidLocations = new Map(); // Map of RFID ID to {lat, lng, confirmed, guessCount}
+        let highestRfidSeen = 0; // Track the highest RFID count globally
         
         function toggleGuessAnalysis() {
             showGuessAnalysis = !showGuessAnalysis;
@@ -1943,7 +2010,7 @@
                 const confirmedIcon = L.divIcon({
                     html: `
                         <div style="
-                            background: ${location.manuallyRegistered ? '#2196F3' : (location.confirmed ? '#4CAF50' : '#FF9800')}; 
+                            background: ${location.manuallyRegistered ? '#2196F3' : (location.autoRegistered ? '#9C27B0' : (location.confirmed ? '#4CAF50' : '#FF9800'))}; 
                             border: 3px solid #fff; 
                             border-radius: 15px; 
                             width: 30px; 
@@ -1968,8 +2035,9 @@
                     <div class="popup-content">
                         <div class="popup-name">📍 RFID Location #${rfidId}</div>
                         <div class="popup-stats">
-                            <div>Status: ${location.manuallyRegistered ? 'Manually Registered' : (location.confirmed ? 'Confirmed' : 'Estimated')}</div>
-                            <div>${location.manuallyRegistered ? 'Manually added by user' : `Based on ${location.guessCount} viewer guesses`}</div>
+                            <div>Status: ${location.manuallyRegistered ? 'Manually Registered' : (location.autoRegistered ? 'Auto-Registered' : (location.confirmed ? 'Confirmed' : 'Estimated'))}</div>
+                            <div>${location.manuallyRegistered ? 'Manually added by user' : (location.autoRegistered ? `First discovered by ${location.discoveredBy}` : `Based on ${location.guessCount} viewer guesses`)}</div>
+                            ${location.autoRegistered ? `<div style="color: #9C27B0; font-size: 11px;">Auto-registered when first scanned</div>` : ''}
                             <div>Coordinates: ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}</div>
                         </div>
                     </div>
