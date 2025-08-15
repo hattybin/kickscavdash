@@ -707,7 +707,7 @@
         }
         
         async function saveRfidLocationToDB(rfidNumber, location) {
-            if (!databaseEnabled) return false;
+            if (!databaseEnabled || !isLeader) return false;
             
             try {
                 const dbLocation = {
@@ -749,7 +749,7 @@
         }
         
         async function updateContestantPositionsInDB(contestants) {
-            if (!databaseEnabled) return false;
+            if (!databaseEnabled || !isLeader) return false;
             
             try {
                 const dbContestants = contestants.map(contestant => {
@@ -782,7 +782,7 @@
         
         // Log activity for tracking
         async function logActivity(type, username, displayName, rfidNumber = null, details = {}) {
-            if (!databaseEnabled) return;
+            if (!databaseEnabled || !isLeader) return;
             
             try {
                 const { error } = await supabase
@@ -846,6 +846,9 @@
                 databaseEnabled = true;
                 updateStatus('Database connected', 'success');
                 console.log('Supabase initialized successfully');
+                
+                // Start leader election
+                startLeaderElection();
                 
                 // Setup real-time subscriptions
                 setupRealtimeSubscriptions();
@@ -1667,6 +1670,12 @@
         }
         
         async function deleteRfidLocation() {
+            if (!isLeader) {
+                updateStatus('RFID deletion only available to data collector', 'error');
+                hideContextMenu();
+                return;
+            }
+            
             if (!contextMenuData.isRfidMarker || !contextMenuData.rfidId) {
                 hideContextMenu();
                 return;
@@ -1932,6 +1941,11 @@
         
         function registerRfidLocation() {
             hideContextMenu();
+            
+            if (!isLeader) {
+                updateStatus('RFID registration only available to data collector', 'error');
+                return;
+            }
             
             const rfidId = prompt('Enter RFID number (1-50):');
             
@@ -2795,15 +2809,150 @@
         }
         
         // Initialize everything
+        // Leader Election System
+        let isLeader = false;
+        let sessionId = generateSessionId();
+        let heartbeatInterval;
+        let leaderCheckInterval;
+        
         // Location History Tracking
         let locationHistoryTimer;
         let lastLoggedPositions = new Map(); // Track last logged position per contestant
         let breadcrumbTrails = new Map(); // Store active breadcrumb trails
         let activeBreadcrumbs = [];
         
+        function generateSessionId() {
+            return 'dash_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+        }
+        
+        function isDashCollector() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('dash') === 'active';
+        }
+        
+        // Leader Election Functions
+        async function tryBecomeLeader() {
+            if (!databaseEnabled) {
+                isLeader = isDashCollector(); // Fallback to URL parameter if DB unavailable
+                updateLeaderStatus();
+                return;
+            }
+            
+            try {
+                // Check current leader status
+                const { data: currentLeader, error: selectError } = await supabase
+                    .from('dashboard_leader')
+                    .select('*')
+                    .eq('id', 1)
+                    .single();
+                
+                if (selectError) throw selectError;
+                
+                const now = new Date();
+                const lastHeartbeat = new Date(currentLeader.last_heartbeat);
+                const timeSinceHeartbeat = (now - lastHeartbeat) / 1000; // seconds
+                
+                // Become leader if: no current leader, heartbeat is stale (>60s), or we're the dash collector
+                const shouldBecomeLeader = 
+                    currentLeader.session_id === 'none' || 
+                    timeSinceHeartbeat > 60 ||
+                    (isDashCollector() && currentLeader.session_id !== sessionId);
+                
+                if (shouldBecomeLeader) {
+                    const { error: updateError } = await supabase
+                        .from('dashboard_leader')
+                        .update({
+                            session_id: sessionId,
+                            client_info: {
+                                isDashCollector: isDashCollector(),
+                                userAgent: navigator.userAgent.substring(0, 100),
+                                timestamp: now.toISOString()
+                            },
+                            last_heartbeat: now.toISOString()
+                        })
+                        .eq('id', 1);
+                    
+                    if (!updateError) {
+                        isLeader = true;
+                        console.log(`Became dashboard leader (${isDashCollector() ? 'collector' : 'public'})`);
+                    }
+                } else if (currentLeader.session_id === sessionId) {
+                    // We're already the leader
+                    isLeader = true;
+                } else {
+                    isLeader = false;
+                }
+                
+            } catch (error) {
+                console.error('Error in leader election:', error);
+                // Fallback: dash collectors can become leader even if DB fails
+                isLeader = isDashCollector();
+            }
+            
+            updateLeaderStatus();
+        }
+        
+        async function sendHeartbeat() {
+            if (!isLeader || !databaseEnabled) return;
+            
+            try {
+                const { error } = await supabase
+                    .from('dashboard_leader')
+                    .update({
+                        last_heartbeat: new Date().toISOString()
+                    })
+                    .eq('session_id', sessionId);
+                    
+                if (error) {
+                    console.warn('Heartbeat failed, may lose leadership:', error);
+                }
+            } catch (error) {
+                console.error('Heartbeat error:', error);
+            }
+        }
+        
+        function updateLeaderStatus() {
+            const statusEl = document.querySelector('.status');
+            if (statusEl) {
+                const roleText = isLeader ? 
+                    (isDashCollector() ? '🎯 Data Collector' : '👑 Leader') : 
+                    '👁️ Read Only';
+                    
+                const existingRole = statusEl.querySelector('.leader-status');
+                if (existingRole) {
+                    existingRole.textContent = roleText;
+                } else {
+                    const roleSpan = document.createElement('span');
+                    roleSpan.className = 'leader-status';
+                    roleSpan.textContent = roleText;
+                    roleSpan.style.cssText = 'float: right; font-size: 11px; opacity: 0.8;';
+                    statusEl.appendChild(roleSpan);
+                }
+            }
+            
+            // Update page title
+            const titlePrefix = isLeader ? 
+                (isDashCollector() ? '[COLLECTOR] ' : '[LEADER] ') : 
+                '[READ-only] ';
+            document.title = titlePrefix + 'Scavenger Hunt - Live Location Map';
+        }
+        
+        function startLeaderElection() {
+            // Try to become leader immediately
+            tryBecomeLeader();
+            
+            // Set up heartbeat (every 30 seconds)
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            heartbeatInterval = setInterval(sendHeartbeat, 30000);
+            
+            // Check for leader changes (every 45 seconds)
+            if (leaderCheckInterval) clearInterval(leaderCheckInterval);
+            leaderCheckInterval = setInterval(tryBecomeLeader, 45000);
+        }
+        
         // Location History Functions
         async function logLocationHistory(contestant) {
-            if (!databaseEnabled) return;
+            if (!databaseEnabled || !isLeader) return;
             
             const [kickUser, displayName, lat, lng, points, rfids, isCached] = contestant;
             const positionKey = `${kickUser}`;
