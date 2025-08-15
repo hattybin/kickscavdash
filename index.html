@@ -1011,8 +1011,7 @@
         
         function autoRegisterRfidLocation(rfidNumber, lat, lng, discovererName, kickUser) {
             // Don't register if coordinates are invalid or at fallback location
-            const FALLBACK_COORDS = [30.24753599760347, -97.71820629756418];
-            const GPS_OFF_THRESHOLD = 0.0001;
+            // Use global constants defined at top
             
             if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
                 console.log(`Invalid coordinates for RFID #${rfidNumber} auto-registration`);
@@ -3120,15 +3119,16 @@
                 return;
             }
             
-            // Close oldest panel if we're at max capacity (based on safe positions)
-            const maxPanels = calculateSafePositions().length;
+            // Create new panel
+            const panelId = `video-panel-${++panelIdCounter}`;
+            const safePositions = calculateSafePositions();
+            const maxPanels = safePositions.length;
+            
+            // Close oldest panel if we're at max capacity
             if (activePanels.length >= maxPanels) {
                 closeVideoPanel(activePanels[0].id);
             }
             
-            // Create new panel
-            const panelId = `video-panel-${++panelIdCounter}`;
-            const safePositions = calculateSafePositions();
             const position = safePositions[activePanels.length];
             
             const panel = document.createElement('div');
@@ -3160,7 +3160,6 @@
                 element: panel
             });
             
-            const maxPanels = calculateSafePositions().length;
             console.log(`Opened panel ${activePanels.length}/${maxPanels} for ${kickUsername}`);
         }
         
