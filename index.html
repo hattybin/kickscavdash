@@ -2277,10 +2277,23 @@
             updateStatus('Refreshing RFID locations...', 'loading');
             
             try {
-                await discoverRfidLocations(true); // Force refresh
+                if (databaseEnabled) {
+                    // Refresh from database
+                    await loadRfidLocationsFromDB();
+                } else {
+                    // Fallback: refresh from API discovery
+                    await discoverRfidLocations(true);
+                }
+                
                 const message = `Refreshed! Found ${rfidLocations.size} RFID locations`;
                 updateStatus(message, 'success');
+                
+                // Update display if RFID markers are shown
+                if (rfidMarkers.length > 0) {
+                    displayRfidLocations();
+                }
             } catch (error) {
+                console.error('Error refreshing RFID data:', error);
                 updateStatus('Error refreshing RFID data', 'error');
             }
         }
