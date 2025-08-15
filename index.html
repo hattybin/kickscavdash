@@ -861,7 +861,7 @@
                         points: points,
                         rfid_count: rfids,
                         coordinates: [lat, lng],
-                        first_seen: currentTime.toISOString()
+                        first_seen: new Date(currentTime).toISOString()
                     });
                 }
             });
