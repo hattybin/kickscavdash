@@ -162,8 +162,11 @@
             border-radius: 8px;
             overflow: hidden;
             z-index: 1000;
-            width: 220px;
-            height: 143px; /* Includes header + 16:9 video */
+            width: 330px;  /* 50% bigger: 220px -> 330px */
+            height: 215px; /* 50% bigger: 143px -> 215px */
+            min-width: 200px;
+            min-height: 130px;
+            resize: both;
         }
         
         .video-panel-header {
@@ -176,6 +179,8 @@
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid #00ff41;
+            cursor: move;
+            user-select: none;
             height: 18px;
         }
         
@@ -217,6 +222,18 @@
             height: 100%;
             border: none;
         }
+        
+        .video-panel-resize-handle {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 16px;
+            height: 16px;
+            background: linear-gradient(-45deg, transparent 0%, transparent 30%, #00ff41 30%, #00ff41 40%, transparent 40%, transparent 70%, #00ff41 70%, #00ff41 80%, transparent 80%);
+            cursor: nw-resize;
+            z-index: 1001;
+        }
+        
         
         .status {
             position: absolute;
@@ -3148,9 +3165,14 @@
                 <div class="video-panel-content">
                     <iframe class="video-panel-iframe" src="https://player.kick.com/${kickUsername}" allowfullscreen></iframe>
                 </div>
+                <div class="video-panel-resize-handle"></div>
             `;
             
             document.body.appendChild(panel);
+            
+            // Add drag and resize functionality
+            makePanelDraggable(panel);
+            makePanelResizable(panel);
             
             // Track panel
             activePanels.push({
@@ -3205,6 +3227,84 @@
         function closeAllVideoPanels() {
             while (activePanels.length > 0) {
                 closeVideoPanel(activePanels[0].id);
+            }
+        }
+        
+        function makePanelDraggable(panel) {
+            const header = panel.querySelector('.video-panel-header');
+            let isDragging = false;
+            let dragOffset = { x: 0, y: 0 };
+            
+            header.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                const rect = panel.getBoundingClientRect();
+                dragOffset.x = e.clientX - rect.left;
+                dragOffset.y = e.clientY - rect.top;
+                
+                document.addEventListener('mousemove', handleDrag);
+                document.addEventListener('mouseup', stopDrag);
+                e.preventDefault();
+            });
+            
+            function handleDrag(e) {
+                if (!isDragging) return;
+                
+                const newX = e.clientX - dragOffset.x;
+                const newY = e.clientY - dragOffset.y;
+                
+                // Keep panel within viewport bounds
+                const maxX = window.innerWidth - panel.offsetWidth;
+                const maxY = window.innerHeight - panel.offsetHeight;
+                
+                panel.style.left = Math.max(0, Math.min(newX, maxX)) + 'px';
+                panel.style.top = Math.max(0, Math.min(newY, maxY)) + 'px';
+                panel.style.right = 'auto';
+                panel.style.bottom = 'auto';
+            }
+            
+            function stopDrag() {
+                isDragging = false;
+                document.removeEventListener('mousemove', handleDrag);
+                document.removeEventListener('mouseup', stopDrag);
+            }
+        }
+        
+        function makePanelResizable(panel) {
+            const handle = panel.querySelector('.video-panel-resize-handle');
+            let isResizing = false;
+            let startSize = { width: 0, height: 0 };
+            let startPos = { x: 0, y: 0 };
+            
+            handle.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                startSize.width = panel.offsetWidth;
+                startSize.height = panel.offsetHeight;
+                startPos.x = e.clientX;
+                startPos.y = e.clientY;
+                
+                document.addEventListener('mousemove', handleResize);
+                document.addEventListener('mouseup', stopResize);
+                e.preventDefault();
+                e.stopPropagation();
+            });
+            
+            function handleResize(e) {
+                if (!isResizing) return;
+                
+                const deltaX = e.clientX - startPos.x;
+                const deltaY = e.clientY - startPos.y;
+                
+                const newWidth = Math.max(200, startSize.width + deltaX);
+                const newHeight = Math.max(130, startSize.height + deltaY);
+                
+                panel.style.width = newWidth + 'px';
+                panel.style.height = newHeight + 'px';
+            }
+            
+            function stopResize() {
+                isResizing = false;
+                document.removeEventListener('mousemove', handleResize);
+                document.removeEventListener('mouseup', stopResize);
             }
         }
         
