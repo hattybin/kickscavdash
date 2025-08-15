@@ -526,6 +526,14 @@
         <div class="context-menu-item" id="delete-rfid-item" onclick="deleteRfidLocation()" style="color: #ff4444;">🗑️ Delete RFID</div>
     </div>
     
+    <div id="contestant-context-menu" class="context-menu">
+        <div class="context-menu-item" onclick="openContestantStream()">📺 Stream</div>
+        <div class="context-menu-item" onclick="showContestantCrumbs()">🍞 Crumbs</div>
+        <div class="context-menu-item" onclick="copyCoordinates()">📋 Copy Coordinates</div>
+        <div class="context-menu-item" onclick="navigateToLocation()">🧭 Navigate Here</div>
+        <div class="context-menu-item" onclick="centerMapHere()">🎯 Center Map Here</div>
+    </div>
+    
     <div class="refresh-control">
         <label for="refresh-rate">Refresh:</label>
         <select id="refresh-rate" onchange="updateRefreshRate()">
@@ -545,6 +553,7 @@
         <button class="control-btn" onclick="toggleGuessAnalysis()">Guess Analysis: OFF</button>
         <button class="control-btn" onclick="toggleRfidLocations()">Show RFID Locations</button>
         <button class="control-btn" onclick="refreshRfidData()" style="display: none;" id="refresh-rfid-btn">Refresh RFID Data</button>
+        <button class="control-btn" onclick="clearBreadcrumbs()" id="clear-breadcrumbs-btn">Clear Breadcrumbs</button>
     </div>
     
     <div class="search-panel">
@@ -1179,6 +1188,11 @@
                 // Save contestant positions to database
                 if (databaseEnabled && contestants.length > 0) {
                     updateContestantPositionsInDB(contestants);
+                    
+                    // Log location history for each contestant (with intelligent filtering)
+                    contestants.forEach(contestant => {
+                        logLocationHistory(contestant);
+                    });
                 }
                 
                 // Update status with GPS state info
@@ -1331,7 +1345,7 @@
                     </div>
                 `;
                 
-                // Create and add marker with click handler
+                // Create and add marker with click and context menu handlers
                 const marker = L.marker([lat, lng], { icon: customIcon })
                     .bindPopup(popupContent)
                     .on('click', function() {
@@ -1340,6 +1354,26 @@
                             current[4] > top[4] ? current : top);
                         const [kickUser, displayName] = topContestant;
                         openStreamVideo(kickUser, displayName);
+                    })
+                    .on('contextmenu', function(e) {
+                        e.originalEvent.preventDefault();
+                        e.originalEvent.stopPropagation();
+                        
+                        // For clusters, pick the top contestant; for single, use that one
+                        const topContestant = contestantGroup.reduce((top, current) => 
+                            current[4] > top[4] ? current : top);
+                        const [kickUser, displayName] = topContestant;
+                        
+                        // Store contestant context data
+                        contextMenuData.lat = lat;
+                        contextMenuData.lng = lng;
+                        contextMenuData.isContestantMarker = true;
+                        contextMenuData.kickUsername = kickUser;
+                        contextMenuData.displayName = displayName;
+                        contextMenuData.rfidId = null;
+                        contextMenuData.isRfidMarker = false;
+                        
+                        showContestantContextMenu(e.originalEvent.pageX, e.originalEvent.pageY);
                     })
                     .addTo(map);
                 
@@ -1522,7 +1556,16 @@
         }
         
         // Context Menu System
-        let contextMenuData = { lat: 0, lng: 0, rfidId: null, isRfidMarker: false, isAutoRegistered: false };
+        let contextMenuData = { 
+            lat: 0, 
+            lng: 0, 
+            rfidId: null, 
+            isRfidMarker: false, 
+            isAutoRegistered: false,
+            isContestantMarker: false,
+            kickUsername: null,
+            displayName: null
+        };
         let waypoints = [];
         let measurementLine = null;
         let measurementStart = null;
@@ -1539,6 +1582,9 @@
                 contextMenuData.rfidId = null;
                 contextMenuData.isRfidMarker = false;
                 contextMenuData.isAutoRegistered = false;
+                contextMenuData.isContestantMarker = false;
+                contextMenuData.kickUsername = null;
+                contextMenuData.displayName = null;
                 
                 // Position context menu at cursor
                 contextMenu.style.left = e.originalEvent.pageX + 'px';
@@ -1550,7 +1596,10 @@
             map.on('click', hideContextMenu);
             document.addEventListener('click', function(e) {
                 const rfidContextMenu = document.getElementById('rfid-context-menu');
-                if (!contextMenu.contains(e.target) && !rfidContextMenu.contains(e.target)) {
+                const contestantContextMenu = document.getElementById('contestant-context-menu');
+                if (!contextMenu.contains(e.target) && 
+                    !rfidContextMenu.contains(e.target) && 
+                    !contestantContextMenu.contains(e.target)) {
                     hideContextMenu();
                 }
             });
@@ -1564,11 +1613,40 @@
             rfidContextMenu.addEventListener('click', function(e) {
                 e.stopPropagation();
             });
+            
+            const contestantContextMenu = document.getElementById('contestant-context-menu');
+            contestantContextMenu.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
         }
         
         function hideContextMenu() {
             document.getElementById('context-menu').style.display = 'none';
             document.getElementById('rfid-context-menu').style.display = 'none';
+            document.getElementById('contestant-context-menu').style.display = 'none';
+        }
+        
+        function showContestantContextMenu(pageX, pageY) {
+            const contestantContextMenu = document.getElementById('contestant-context-menu');
+            
+            // Position and show menu
+            contestantContextMenu.style.left = pageX + 'px';
+            contestantContextMenu.style.top = pageY + 'px';
+            contestantContextMenu.style.display = 'block';
+        }
+        
+        function openContestantStream() {
+            if (contextMenuData.isContestantMarker && contextMenuData.kickUsername) {
+                openStreamVideo(contextMenuData.kickUsername, contextMenuData.displayName);
+            }
+            hideContextMenu();
+        }
+        
+        async function showContestantCrumbs() {
+            if (contextMenuData.isContestantMarker && contextMenuData.kickUsername) {
+                await showBreadcrumbTrail(contextMenuData.kickUsername, contextMenuData.displayName);
+            }
+            hideContextMenu();
         }
         
         function showRfidContextMenu(pageX, pageY) {
@@ -2717,6 +2795,160 @@
         }
         
         // Initialize everything
+        // Location History Tracking
+        let locationHistoryTimer;
+        let lastLoggedPositions = new Map(); // Track last logged position per contestant
+        let breadcrumbTrails = new Map(); // Store active breadcrumb trails
+        let activeBreadcrumbs = [];
+        
+        // Location History Functions
+        async function logLocationHistory(contestant) {
+            if (!databaseEnabled) return;
+            
+            const [kickUser, displayName, lat, lng, points, rfids, isCached] = contestant;
+            const positionKey = `${kickUser}`;
+            const currentPosition = { lat: parseFloat(lat), lng: parseFloat(lng) };
+            
+            // Check if this is a significant position change (>50 meters) or first log
+            const lastPosition = lastLoggedPositions.get(positionKey);
+            let shouldLog = false;
+            
+            if (!lastPosition) {
+                // First time seeing this contestant
+                shouldLog = true;
+            } else {
+                // Calculate distance from last logged position
+                const distance = calculateDistance(
+                    lastPosition.lat, lastPosition.lng,
+                    currentPosition.lat, currentPosition.lng
+                );
+                
+                // Log if moved >50m OR if last log was >10 minutes ago
+                const timeSinceLastLog = Date.now() - lastPosition.timestamp;
+                shouldLog = distance > 0.05 || timeSinceLastLog > 10 * 60 * 1000;
+            }
+            
+            if (shouldLog) {
+                try {
+                    const { error } = await supabase
+                        .from('location_history')
+                        .insert([{
+                            kick_username: kickUser,
+                            display_name: displayName,
+                            lat: currentPosition.lat,
+                            lng: currentPosition.lng,
+                            points: parseInt(points),
+                            rfid_count: parseInt(rfids),
+                            gps_state: gpsState,
+                            is_cached: Boolean(isCached)
+                        }]);
+
+                    if (error) throw error;
+                    
+                    // Update last logged position
+                    lastLoggedPositions.set(positionKey, {
+                        ...currentPosition,
+                        timestamp: Date.now()
+                    });
+                    
+                    console.log(`Logged location history for ${kickUser}`);
+                } catch (error) {
+                    console.error('Error logging location history:', error);
+                }
+            }
+        }
+        
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            // Haversine formula for distance in kilometers
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                     Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+        
+        async function loadBreadcrumbTrail(kickUsername) {
+            if (!databaseEnabled) return [];
+            
+            try {
+                const { data, error } = await supabase
+                    .from('recent_location_history')
+                    .select('*')
+                    .eq('kick_username', kickUsername)
+                    .order('recorded_at', { ascending: true });
+                    
+                if (error) throw error;
+                
+                return data || [];
+            } catch (error) {
+                console.error('Error loading breadcrumb trail:', error);
+                return [];
+            }
+        }
+        
+        async function showBreadcrumbTrail(kickUsername, displayName) {
+            const trail = await loadBreadcrumbTrail(kickUsername);
+            
+            if (trail.length < 2) {
+                updateStatus(`No location history found for ${displayName}`, 'error');
+                return;
+            }
+            
+            // Clear existing breadcrumbs
+            clearBreadcrumbs();
+            
+            // Create trail polyline
+            const trailCoords = trail.map(point => [point.lat, point.lng]);
+            const trailLine = L.polyline(trailCoords, {
+                color: '#ff6b6b',
+                weight: 3,
+                opacity: 0.8,
+                dashArray: '10, 5'
+            }).addTo(map);
+            
+            // Add markers for start and end points
+            const startPoint = trail[0];
+            const endPoint = trail[trail.length - 1];
+            
+            const startMarker = L.marker([startPoint.lat, startPoint.lng], {
+                icon: L.divIcon({
+                    html: `<div style="background: #28a745; border: 2px solid #fff; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: bold;">S</div>`,
+                    className: 'breadcrumb-marker',
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
+                })
+            }).bindPopup(`${displayName} - Trail Start<br>${new Date(startPoint.recorded_at).toLocaleString()}`).addTo(map);
+            
+            const endMarker = L.marker([endPoint.lat, endPoint.lng], {
+                icon: L.divIcon({
+                    html: `<div style="background: #dc3545; border: 2px solid #fff; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: bold;">E</div>`,
+                    className: 'breadcrumb-marker',
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
+                })
+            }).bindPopup(`${displayName} - Current Position<br>${new Date(endPoint.recorded_at).toLocaleString()}`).addTo(map);
+            
+            // Store breadcrumb elements for cleanup
+            activeBreadcrumbs = [trailLine, startMarker, endMarker];
+            
+            // Fit map to trail
+            map.fitBounds(trailLine.getBounds(), { padding: [20, 20] });
+            
+            updateStatus(`Showing ${trail.length} location points for ${displayName} over last 4 hours`, 'success');
+        }
+        
+        function clearBreadcrumbs() {
+            activeBreadcrumbs.forEach(element => {
+                if (map.hasLayer(element)) {
+                    map.removeLayer(element);
+                }
+            });
+            activeBreadcrumbs = [];
+        }
+        
         // Video Player Functions
         let currentStreamer = null;
         
