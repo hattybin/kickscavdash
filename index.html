@@ -155,74 +155,64 @@
             border-color: #00cc35;
         }
         
-        .video-player {
+        .video-panel {
             position: absolute;
-            bottom: 10px;
-            right: 10px;
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(0, 0, 0, 0.95);
             border: 2px solid #00ff41;
             border-radius: 8px;
             overflow: hidden;
             z-index: 1000;
-            display: none;
-            min-width: 320px;
-            max-width: 480px;
-            width: 25vw;
+            width: 200px;
+            height: 130px; /* Includes header + 16:9 video */
         }
         
-        .video-player.show {
-            display: block;
-        }
-        
-        .video-player.minimized {
-            height: 40px;
-        }
-        
-        .video-player.minimized .video-content {
-            display: none;
-        }
-        
-        .video-header {
+        .video-panel-header {
             background: rgba(0, 255, 65, 0.2);
             color: #00ff41;
-            padding: 8px 12px;
-            font-size: 12px;
+            padding: 4px 8px;
+            font-size: 11px;
             font-weight: bold;
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid #00ff41;
+            height: 18px;
         }
         
-        .video-controls {
-            display: flex;
-            gap: 5px;
+        .video-panel-title {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex: 1;
         }
         
-        .video-btn {
+        .video-panel-close {
             background: none;
             border: none;
             color: #00ff41;
             cursor: pointer;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 14px;
+            padding: 0;
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
         }
         
-        .video-btn:hover {
-            background: rgba(0, 255, 65, 0.2);
+        .video-panel-close:hover {
+            background: rgba(255, 68, 68, 0.3);
+            color: #ff4444;
+            border-radius: 2px;
         }
         
-        .video-content {
+        .video-panel-content {
             position: relative;
             width: 100%;
-            padding-bottom: 56.25%; /* 16:9 aspect ratio */
+            height: calc(100% - 20px); /* Subtract header height */
         }
         
-        .video-iframe {
-            position: absolute;
-            top: 0;
-            left: 0;
+        .video-panel-iframe {
             width: 100%;
             height: 100%;
             border: none;
@@ -554,6 +544,7 @@
         <button class="control-btn" onclick="toggleRfidLocations()">Show RFID Locations</button>
         <button class="control-btn" onclick="refreshRfidData()" style="display: none;" id="refresh-rfid-btn">Refresh RFID Data</button>
         <button class="control-btn" onclick="clearBreadcrumbs()" id="clear-breadcrumbs-btn">Clear Breadcrumbs</button>
+        <button class="control-btn" onclick="closeAllVideoPanels()" id="close-videos-btn">Close All Videos</button>
     </div>
     
     <div class="search-panel">
@@ -619,18 +610,7 @@
         </iframe>
     </div>
     
-    <div class="video-player" id="video-player">
-        <div class="video-header">
-            <span id="video-title">Select a streamer to watch</span>
-            <div class="video-controls">
-                <button class="video-btn" onclick="minimizeVideo()" title="Minimize">−</button>
-                <button class="video-btn" onclick="closeVideo()" title="Close">×</button>
-            </div>
-        </div>
-        <div class="video-content" id="video-content">
-            <iframe class="video-iframe" id="video-iframe" allowfullscreen></iframe>
-        </div>
-    </div>
+    <!-- Video panels will be dynamically created here -->
 
     <script>
         // Configuration
@@ -3098,43 +3078,121 @@
             activeBreadcrumbs = [];
         }
         
-        // Video Player Functions
-        let currentStreamer = null;
+        // Multi-Panel Video System
+        let activePanels = [];
+        let panelIdCounter = 0;
+        
+        // Clockwise positioning: top(4) → right(3) → bottom(4) → left(3)
+        const panelPositions = [
+            // Top row (4 panels)
+            { top: '10px', left: '10px' },
+            { top: '10px', left: '220px' },
+            { top: '10px', left: '430px' },
+            { top: '10px', left: '640px' },
+            // Right side (3 panels)
+            { top: '150px', right: '10px' },
+            { top: '290px', right: '10px' },
+            { top: '430px', right: '10px' },
+            // Bottom row (4 panels, right to left)
+            { bottom: '10px', right: '10px' },
+            { bottom: '10px', right: '220px' },
+            { bottom: '10px', right: '430px' },
+            { bottom: '10px', right: '640px' },
+            // Left side (3 panels, bottom to top)
+            { bottom: '150px', left: '10px' },
+            { bottom: '290px', left: '10px' }
+        ];
         
         function openStreamVideo(kickUsername, displayName) {
             if (!kickUsername) return;
             
-            const videoPlayer = document.getElementById('video-player');
-            const videoTitle = document.getElementById('video-title');
-            const videoIframe = document.getElementById('video-iframe');
+            // Check if panel already exists for this streamer
+            const existingPanel = activePanels.find(p => p.username === kickUsername);
+            if (existingPanel) {
+                console.log(`Panel already open for ${kickUsername}`);
+                return;
+            }
             
-            currentStreamer = kickUsername;
-            videoTitle.textContent = `${displayName} (@${kickUsername})`;
-            videoIframe.src = `https://player.kick.com/${kickUsername}`;
+            // Close oldest panel if we're at max capacity
+            if (activePanels.length >= 12) {
+                closeVideoPanel(activePanels[0].id);
+            }
             
-            videoPlayer.classList.add('show');
-            videoPlayer.classList.remove('minimized');
+            // Create new panel
+            const panelId = `video-panel-${++panelIdCounter}`;
+            const position = panelPositions[activePanels.length];
             
-            console.log(`Opening stream for ${kickUsername}`);
+            const panel = document.createElement('div');
+            panel.id = panelId;
+            panel.className = 'video-panel';
+            
+            // Apply position
+            Object.keys(position).forEach(key => {
+                panel.style[key] = position[key];
+            });
+            
+            panel.innerHTML = `
+                <div class="video-panel-header">
+                    <div class="video-panel-title">${displayName}</div>
+                    <button class="video-panel-close" onclick="closeVideoPanel('${panelId}')">×</button>
+                </div>
+                <div class="video-panel-content">
+                    <iframe class="video-panel-iframe" src="https://player.kick.com/${kickUsername}" allowfullscreen></iframe>
+                </div>
+            `;
+            
+            document.body.appendChild(panel);
+            
+            // Track panel
+            activePanels.push({
+                id: panelId,
+                username: kickUsername,
+                displayName: displayName,
+                element: panel
+            });
+            
+            console.log(`Opened panel ${activePanels.length}/12 for ${kickUsername}`);
         }
         
-        function closeVideo() {
-            const videoPlayer = document.getElementById('video-player');
-            const videoIframe = document.getElementById('video-iframe');
+        function closeVideoPanel(panelId) {
+            const panelIndex = activePanels.findIndex(p => p.id === panelId);
+            if (panelIndex === -1) return;
             
-            videoPlayer.classList.remove('show', 'minimized');
-            videoIframe.src = '';
-            currentStreamer = null;
+            const panel = activePanels[panelIndex];
             
-            console.log('Video player closed');
+            // Remove from DOM
+            panel.element.remove();
+            
+            // Remove from tracking
+            activePanels.splice(panelIndex, 1);
+            
+            // Reposition remaining panels
+            repositionPanels();
+            
+            console.log(`Closed panel for ${panel.displayName}, ${activePanels.length} panels remaining`);
         }
         
-        function minimizeVideo() {
-            const videoPlayer = document.getElementById('video-player');
-            videoPlayer.classList.toggle('minimized');
-            
-            const isMinimized = videoPlayer.classList.contains('minimized');
-            console.log(`Video player ${isMinimized ? 'minimized' : 'expanded'}`);
+        function repositionPanels() {
+            activePanels.forEach((panel, index) => {
+                const position = panelPositions[index];
+                
+                // Clear all position styles
+                panel.element.style.top = '';
+                panel.element.style.right = '';
+                panel.element.style.bottom = '';
+                panel.element.style.left = '';
+                
+                // Apply new position
+                Object.keys(position).forEach(key => {
+                    panel.element.style[key] = position[key];
+                });
+            });
+        }
+        
+        function closeAllVideoPanels() {
+            while (activePanels.length > 0) {
+                closeVideoPanel(activePanels[0].id);
+            }
         }
         
         document.addEventListener('DOMContentLoaded', () => {
