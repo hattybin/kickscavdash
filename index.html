@@ -182,6 +182,8 @@
             cursor: move;
             user-select: none;
             height: 18px;
+            position: relative;
+            z-index: 1001;
         }
         
         .video-panel-title {
@@ -215,23 +217,34 @@
             position: relative;
             width: 100%;
             height: calc(100% - 20px); /* Subtract header height */
+            overflow: hidden;
         }
         
         .video-panel-iframe {
             width: 100%;
             height: 100%;
             border: none;
+            position: relative;
+            z-index: 999;
         }
         
         .video-panel-resize-handle {
             position: absolute;
-            bottom: 0;
-            right: 0;
+            bottom: 2px;
+            right: 2px;
             width: 16px;
             height: 16px;
-            background: linear-gradient(-45deg, transparent 0%, transparent 30%, #00ff41 30%, #00ff41 40%, transparent 40%, transparent 70%, #00ff41 70%, #00ff41 80%, transparent 80%);
+            background: #00ff41;
+            border: 1px solid #000;
             cursor: nw-resize;
-            z-index: 1001;
+            z-index: 1002;
+            pointer-events: all;
+            opacity: 0.8;
+        }
+        
+        .video-panel-resize-handle:hover {
+            opacity: 1;
+            background: #00cc35;
         }
         
         
