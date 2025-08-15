@@ -540,8 +540,8 @@
         <button class="control-btn" onclick="toggleAutoRefresh()">Auto Refresh: ON</button>
         <button class="control-btn" onclick="refreshData()">Refresh Now</button>
         <button class="control-btn" onclick="fitToMarkers()">Fit All</button>
-        <button class="control-btn" onclick="toggleGuessAnalysis()">Guess Analysis: OFF</button>
-        <button class="control-btn" onclick="toggleRfidLocations()">Show RFID Locations</button>
+        <button class="control-btn" onclick="toggleGuessAnalysis(event)">Guess Analysis: OFF</button>
+        <button class="control-btn" onclick="toggleRfidLocations(event)">Show RFID Locations</button>
         <button class="control-btn" onclick="refreshRfidData()" style="display: none;" id="refresh-rfid-btn">Refresh RFID Data</button>
         <button class="control-btn" onclick="clearBreadcrumbs()" id="clear-breadcrumbs-btn">Clear Breadcrumbs</button>
         <button class="control-btn" onclick="closeAllVideoPanels()" id="close-videos-btn">Close All Videos</button>
@@ -2376,7 +2376,7 @@
         let rfidLocations = new Map(); // Map of RFID ID to {lat, lng, confirmed, guessCount}
         let highestRfidSeen = 0; // Track the highest RFID count globally
         
-        function toggleGuessAnalysis() {
+        function toggleGuessAnalysis(event) {
             showGuessAnalysis = !showGuessAnalysis;
             const btn = event.target;
             
@@ -2637,7 +2637,7 @@
             rfidMarkers = [];
         }
         
-        function toggleRfidLocations() {
+        function toggleRfidLocations(event) {
             const btn = event.target;
             const refreshBtn = document.getElementById('refresh-rfid-btn');
             
