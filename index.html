@@ -519,6 +519,13 @@
         <div class="context-menu-item" onclick="searchNearby()">🔍 Search Nearby</div>
     </div>
     
+    <div id="rfid-context-menu" class="context-menu">
+        <div class="context-menu-item" onclick="copyCoordinates()">📋 Copy Coordinates</div>
+        <div class="context-menu-item" onclick="navigateToLocation()">🧭 Navigate Here</div>
+        <div class="context-menu-item" onclick="centerMapHere()">🎯 Center Map Here</div>
+        <div class="context-menu-item" id="delete-rfid-item" onclick="deleteRfidLocation()" style="color: #ff4444;">🗑️ Delete RFID</div>
+    </div>
+    
     <div class="refresh-control">
         <label for="refresh-rate">Refresh:</label>
         <select id="refresh-rate" onchange="updateRefreshRate()">
@@ -1515,7 +1522,7 @@
         }
         
         // Context Menu System
-        let contextMenuData = { lat: 0, lng: 0 };
+        let contextMenuData = { lat: 0, lng: 0, rfidId: null, isRfidMarker: false, isAutoRegistered: false };
         let waypoints = [];
         let measurementLine = null;
         let measurementStart = null;
@@ -1529,6 +1536,9 @@
                 
                 contextMenuData.lat = e.latlng.lat;
                 contextMenuData.lng = e.latlng.lng;
+                contextMenuData.rfidId = null;
+                contextMenuData.isRfidMarker = false;
+                contextMenuData.isAutoRegistered = false;
                 
                 // Position context menu at cursor
                 contextMenu.style.left = e.originalEvent.pageX + 'px';
@@ -1539,19 +1549,97 @@
             // Hide context menu on map click or outside click
             map.on('click', hideContextMenu);
             document.addEventListener('click', function(e) {
-                if (!contextMenu.contains(e.target)) {
+                const rfidContextMenu = document.getElementById('rfid-context-menu');
+                if (!contextMenu.contains(e.target) && !rfidContextMenu.contains(e.target)) {
                     hideContextMenu();
                 }
             });
             
-            // Prevent map events when clicking context menu
+            // Prevent map events when clicking context menus
             contextMenu.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
+            
+            const rfidContextMenu = document.getElementById('rfid-context-menu');
+            rfidContextMenu.addEventListener('click', function(e) {
                 e.stopPropagation();
             });
         }
         
         function hideContextMenu() {
             document.getElementById('context-menu').style.display = 'none';
+            document.getElementById('rfid-context-menu').style.display = 'none';
+        }
+        
+        function showRfidContextMenu(pageX, pageY) {
+            const rfidContextMenu = document.getElementById('rfid-context-menu');
+            const deleteItem = document.getElementById('delete-rfid-item');
+            
+            // Only show delete option for auto-registered RFIDs
+            if (contextMenuData.isAutoRegistered) {
+                deleteItem.style.display = 'block';
+            } else {
+                deleteItem.style.display = 'none';
+            }
+            
+            // Position and show menu
+            rfidContextMenu.style.left = pageX + 'px';
+            rfidContextMenu.style.top = pageY + 'px';
+            rfidContextMenu.style.display = 'block';
+        }
+        
+        async function deleteRfidLocation() {
+            if (!contextMenuData.isRfidMarker || !contextMenuData.rfidId) {
+                hideContextMenu();
+                return;
+            }
+            
+            const rfidId = contextMenuData.rfidId;
+            const location = rfidLocations.get(rfidId);
+            
+            if (!location || !location.autoRegistered) {
+                updateStatus('Can only delete auto-registered RFIDs', 'error');
+                hideContextMenu();
+                return;
+            }
+            
+            const confirmed = confirm(`Delete auto-registered RFID #${rfidId}?\n\nThis will remove it from the map and database.`);
+            if (!confirmed) {
+                hideContextMenu();
+                return;
+            }
+            
+            try {
+                // Remove from local map
+                rfidLocations.delete(rfidId);
+                
+                // Remove from database
+                if (databaseEnabled) {
+                    const { error } = await supabase
+                        .from('rfid_locations')
+                        .delete()
+                        .eq('rfid_number', rfidId);
+                    
+                    if (error) throw error;
+                    console.log(`Deleted RFID #${rfidId} from database`);
+                } else {
+                    // Remove from localStorage
+                    saveRfidCache();
+                }
+                
+                // Refresh display
+                if (rfidMarkers.length > 0) {
+                    displayRfidLocations();
+                }
+                
+                updateStatus(`Deleted RFID #${rfidId}`, 'success');
+                
+            } catch (error) {
+                console.error('Error deleting RFID:', error);
+                updateStatus('Error deleting RFID location', 'error');
+            }
+            
+            hideContextMenu();
         }
         
         function copyCoordinates() {
@@ -2454,6 +2542,19 @@
                     pane: 'markerPane'
                 })
                     .bindPopup(popupContent)
+                    .on('contextmenu', function(e) {
+                        e.originalEvent.preventDefault();
+                        e.originalEvent.stopPropagation();
+                        
+                        // Store RFID context data
+                        contextMenuData.lat = location.lat;
+                        contextMenuData.lng = location.lng;
+                        contextMenuData.rfidId = rfidId;
+                        contextMenuData.isRfidMarker = true;
+                        contextMenuData.isAutoRegistered = location.autoRegistered;
+                        
+                        showRfidContextMenu(e.originalEvent.pageX, e.originalEvent.pageY);
+                    })
                     .addTo(map);
                 
                 rfidMarkers.push(marker);
