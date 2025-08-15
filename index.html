@@ -155,6 +155,79 @@
             border-color: #00cc35;
         }
         
+        .video-player {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #00ff41;
+            border-radius: 8px;
+            overflow: hidden;
+            z-index: 1000;
+            display: none;
+            min-width: 320px;
+            max-width: 480px;
+            width: 25vw;
+        }
+        
+        .video-player.show {
+            display: block;
+        }
+        
+        .video-player.minimized {
+            height: 40px;
+        }
+        
+        .video-player.minimized .video-content {
+            display: none;
+        }
+        
+        .video-header {
+            background: rgba(0, 255, 65, 0.2);
+            color: #00ff41;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #00ff41;
+        }
+        
+        .video-controls {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .video-btn {
+            background: none;
+            border: none;
+            color: #00ff41;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 14px;
+        }
+        
+        .video-btn:hover {
+            background: rgba(0, 255, 65, 0.2);
+        }
+        
+        .video-content {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%; /* 16:9 aspect ratio */
+        }
+        
+        .video-iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
         .status {
             position: absolute;
             bottom: 10px;
@@ -239,15 +312,15 @@
         
         .overlay-panel {
             position: absolute;
-            bottom: 10px;
-            right: 10px;
+            bottom: 90px;
+            left: 10px;
             background: rgba(0, 0, 0, 0.9);
             border: 2px solid #00ff41;
             border-radius: 8px;
             overflow: hidden;
             z-index: 1000;
-            width: 300px;
-            height: 200px;
+            width: 200px;
+            height: 120px;
         }
         
         .overlay-header {
@@ -528,6 +601,19 @@
             title="DariusIRL Stream Overlay"
             allowfullscreen>
         </iframe>
+    </div>
+    
+    <div class="video-player" id="video-player">
+        <div class="video-header">
+            <span id="video-title">Select a streamer to watch</span>
+            <div class="video-controls">
+                <button class="video-btn" onclick="minimizeVideo()" title="Minimize">−</button>
+                <button class="video-btn" onclick="closeVideo()" title="Close">×</button>
+            </div>
+        </div>
+        <div class="video-content" id="video-content">
+            <iframe class="video-iframe" id="video-iframe" allowfullscreen></iframe>
+        </div>
     </div>
 
     <script>
@@ -1238,9 +1324,16 @@
                     </div>
                 `;
                 
-                // Create and add marker
+                // Create and add marker with click handler
                 const marker = L.marker([lat, lng], { icon: customIcon })
                     .bindPopup(popupContent)
+                    .on('click', function() {
+                        // For clusters, pick the top contestant by points; for single, use that one
+                        const topContestant = contestantGroup.reduce((top, current) => 
+                            current[4] > top[4] ? current : top);
+                        const [kickUser, displayName] = topContestant;
+                        openStreamVideo(kickUser, displayName);
+                    })
                     .addTo(map);
                 
                 markers.push(marker);
@@ -2523,6 +2616,45 @@
         }
         
         // Initialize everything
+        // Video Player Functions
+        let currentStreamer = null;
+        
+        function openStreamVideo(kickUsername, displayName) {
+            if (!kickUsername) return;
+            
+            const videoPlayer = document.getElementById('video-player');
+            const videoTitle = document.getElementById('video-title');
+            const videoIframe = document.getElementById('video-iframe');
+            
+            currentStreamer = kickUsername;
+            videoTitle.textContent = `${displayName} (@${kickUsername})`;
+            videoIframe.src = `https://kick.com/${kickUsername}/embed?autoplay=1`;
+            
+            videoPlayer.classList.add('show');
+            videoPlayer.classList.remove('minimized');
+            
+            console.log(`Opening stream for ${kickUsername}`);
+        }
+        
+        function closeVideo() {
+            const videoPlayer = document.getElementById('video-player');
+            const videoIframe = document.getElementById('video-iframe');
+            
+            videoPlayer.classList.remove('show', 'minimized');
+            videoIframe.src = '';
+            currentStreamer = null;
+            
+            console.log('Video player closed');
+        }
+        
+        function minimizeVideo() {
+            const videoPlayer = document.getElementById('video-player');
+            videoPlayer.classList.toggle('minimized');
+            
+            const isMinimized = videoPlayer.classList.contains('minimized');
+            console.log(`Video player ${isMinimized ? 'minimized' : 'expanded'}`);
+        }
+        
         document.addEventListener('DOMContentLoaded', () => {
             initMap();
         });
