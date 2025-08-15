@@ -617,10 +617,7 @@
 
                 const { data, error } = await supabase
                     .from('contestant_positions')
-                    .upsert(dbContestants, { 
-                        onConflict: 'kick_username',
-                        ignoreDuplicates: false 
-                    });
+                    .upsert(dbContestants);
 
                 if (error) throw error;
                 console.log(`Updated ${dbContestants.length} contestant positions in database`);
