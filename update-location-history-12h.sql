@@ -12,8 +12,7 @@ SELECT
     display_name,
     lat,
     lng,
-    recorded_at,
-    created_at
+    recorded_at
 FROM location_history
 WHERE recorded_at >= NOW() - INTERVAL '12 hours'
 ORDER BY kick_username, recorded_at ASC;
