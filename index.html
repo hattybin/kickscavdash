@@ -611,7 +611,8 @@
                         points: parseInt(points),
                         rfid_count: parseInt(rfids),
                         is_cached: Boolean(isCached),
-                        gps_state: gpsState
+                        gps_state: gpsState,
+                        last_updated: new Date().toISOString()
                     };
                 });
 
