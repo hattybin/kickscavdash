@@ -3265,8 +3265,49 @@
         }
         
         
+        // WASD and Arrow Key Map Controls
+        function setupKeyboardControls() {
+            const panDistance = 0.01; // How far to move with each key press
+            
+            document.addEventListener('keydown', (e) => {
+                // Skip if user is typing in an input field
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                    return;
+                }
+                
+                const center = map.getCenter();
+                let newLat = center.lat;
+                let newLng = center.lng;
+                
+                switch(e.key.toLowerCase()) {
+                    case 'w':
+                    case 'arrowup':
+                        newLat += panDistance;
+                        break;
+                    case 's':
+                    case 'arrowdown':
+                        newLat -= panDistance;
+                        break;
+                    case 'a':
+                    case 'arrowleft':
+                        newLng -= panDistance;
+                        break;
+                    case 'd':
+                    case 'arrowright':
+                        newLng += panDistance;
+                        break;
+                    default:
+                        return; // Don't prevent default for other keys
+                }
+                
+                map.setView([newLat, newLng]);
+                e.preventDefault();
+            });
+        }
+        
         document.addEventListener('DOMContentLoaded', () => {
             initMap();
+            setupKeyboardControls();
         });
     </script>
 </body>
