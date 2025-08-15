@@ -6,6 +6,7 @@
     <title>Scavenger Hunt - Live Location Map</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
         body {
             margin: 0;
@@ -513,12 +514,146 @@
         let contestantActivity = new Map(); // Track RFID scan activity over time
         let channelIcons = new Map(); // Cache Kick profile pictures
         
+        // Supabase Configuration
+        const SUPABASE_URL = 'https://dcvonodgixvjrcsdfnat.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjdm9ub2RnaXh2anJjc2RmbmF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUyMTg4MTksImV4cCI6MjA3MDc5NDgxOX0.BkxHN2MOKFzkuO0xNSRXcuKysloJ9diQ3Unw6Szt3VE';
+        let supabase;
+        let databaseEnabled = false;
+        
         // GPS detection constants
         const GPS_OFF_THRESHOLD = 0.0001; // If all contestants within this distance, GPS is likely off
         const FALLBACK_COORDS = [30.24753599760347, -97.71820629756418]; // The coordinate everyone gets when GPS is off
         
+        // Supabase Database Functions
+        async function loadRfidLocationsFromDB() {
+            if (!databaseEnabled) return false;
+            
+            try {
+                const { data, error } = await supabase
+                    .from('rfid_locations')
+                    .select('*')
+                    .order('rfid_number');
+                
+                if (error) throw error;
+                
+                // Convert to existing format
+                rfidLocations.clear();
+                data.forEach(location => {
+                    rfidLocations.set(location.rfid_number, {
+                        lat: parseFloat(location.lat),
+                        lng: parseFloat(location.lng),
+                        confirmed: location.confirmed,
+                        guessCount: location.guess_count,
+                        rfidId: location.rfid_number,
+                        manuallyRegistered: location.discovery_method === 'manual',
+                        autoRegistered: location.discovery_method === 'auto',
+                        discoveredBy: location.discovered_by,
+                        discoveredByUser: location.discovered_by_username,
+                        discoveredAt: location.discovered_at
+                    });
+                });
+                
+                console.log(`Loaded ${data.length} RFID locations from database`);
+                return true;
+            } catch (error) {
+                console.error('Error loading RFID locations:', error);
+                return false;
+            }
+        }
+        
+        async function saveRfidLocationToDB(rfidNumber, location) {
+            if (!databaseEnabled) return false;
+            
+            try {
+                const dbLocation = {
+                    rfid_number: rfidNumber,
+                    lat: location.lat,
+                    lng: location.lng,
+                    discovery_method: location.manuallyRegistered ? 'manual' : 
+                                     location.autoRegistered ? 'auto' : 'viewer_guess',
+                    discovered_by: location.discoveredBy,
+                    discovered_by_username: location.discoveredByUser,
+                    guess_count: location.guessCount,
+                    confirmed: location.confirmed,
+                    metadata: {
+                        discoveredAt: location.discoveredAt
+                    }
+                };
+
+                const { data, error } = await supabase
+                    .from('rfid_locations')
+                    .upsert([dbLocation], { 
+                        onConflict: 'rfid_number',
+                        ignoreDuplicates: false 
+                    });
+
+                if (error) throw error;
+                
+                console.log(`Saved RFID #${rfidNumber} to database`);
+                return true;
+            } catch (error) {
+                console.error('Error saving RFID location:', error);
+                return false;
+            }
+        }
+        
+        function setupRealtimeSubscriptions() {
+            if (!databaseEnabled) return;
+            
+            // Listen for new RFID discoveries
+            supabase
+                .channel('rfid-updates')
+                .on('postgres_changes', { 
+                    event: 'INSERT', 
+                    schema: 'public', 
+                    table: 'rfid_locations' 
+                }, (payload) => {
+                    console.log('New RFID discovered!', payload);
+                    const location = payload.new;
+                    rfidLocations.set(location.rfid_number, {
+                        lat: parseFloat(location.lat),
+                        lng: parseFloat(location.lng),
+                        confirmed: location.confirmed,
+                        guessCount: location.guess_count,
+                        rfidId: location.rfid_number,
+                        manuallyRegistered: location.discovery_method === 'manual',
+                        autoRegistered: location.discovery_method === 'auto',
+                        discoveredBy: location.discovered_by
+                    });
+                    
+                    if (rfidMarkers.length > 0) {
+                        displayRfidLocations();
+                    }
+                    
+                    updateStatus(`🎯 New RFID #${location.rfid_number} discovered!`, 'success');
+                })
+                .subscribe();
+        }
+        
+        async function initSupabase() {
+            try {
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                
+                // Test connection
+                const { data, error } = await supabase.from('rfid_locations').select('count').limit(1);
+                if (error) throw error;
+                
+                databaseEnabled = true;
+                updateStatus('Database connected', 'success');
+                console.log('Supabase initialized successfully');
+                
+                // Setup real-time subscriptions
+                setupRealtimeSubscriptions();
+                
+            } catch (error) {
+                console.warn('Database unavailable, using localStorage fallback:', error);
+                updateStatus('Using local storage (database offline)', 'loading');
+                databaseEnabled = false;
+            }
+        }
+        
         // Initialize map
-        function initMap() {
+        async function initMap() {
             // Initialize Leaflet map
             map = L.map('map').setView(AUSTIN_CENTER, 12);
             
@@ -533,8 +668,15 @@
             
             updateStatus('Map loaded', 'success');
             
-            // Load cached RFID data if available
-            loadRfidCache();
+            // Initialize database
+            await initSupabase();
+            
+            // Load RFID data (from database or localStorage fallback)
+            if (databaseEnabled) {
+                await loadRfidLocationsFromDB();
+            } else {
+                loadRfidCache();
+            }
             
             // Setup context menu
             setupContextMenu();
@@ -694,8 +836,12 @@
             
             rfidLocations.set(rfidNumber, rfidLocation);
             
-            // Save to cache
-            saveRfidCache();
+            // Save to database (with localStorage fallback)
+            if (databaseEnabled) {
+                saveRfidLocationToDB(rfidNumber, rfidLocation);
+            } else {
+                saveRfidCache();
+            }
             
             // Update display if RFID markers are shown
             if (rfidMarkers.length > 0) {
@@ -1401,8 +1547,12 @@
             // Add to our locations map
             rfidLocations.set(rfidNumber, rfidLocation);
             
-            // Save to cache
-            saveRfidCache();
+            // Save to database (with localStorage fallback)
+            if (databaseEnabled) {
+                saveRfidLocationToDB(rfidNumber, rfidLocation);
+            } else {
+                saveRfidCache();
+            }
             
             // If RFID locations are currently being shown, update the display
             if (rfidMarkers.length > 0) {
