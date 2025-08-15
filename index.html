@@ -856,13 +856,27 @@
                         firstSeen: new Date(currentTime)
                     });
                     
-                    // Log new contestant discovery
-                    logActivity('new_contestant', kickUser, displayName, null, {
-                        points: points,
-                        rfid_count: rfids,
-                        coordinates: [lat, lng],
-                        first_seen: new Date(currentTime).toISOString()
-                    });
+                    // Log new contestant discovery (only if not already logged in last hour)
+                    if (databaseEnabled) {
+                        // Check if we've already logged this contestant recently to avoid duplicates
+                        supabase.from('activity_log')
+                            .select('id')
+                            .eq('activity_type', 'new_contestant')
+                            .eq('kick_username', kickUser)
+                            .gte('created_at', new Date(Date.now() - 60*60*1000).toISOString()) // Last hour
+                            .limit(1)
+                            .then(({ data, error }) => {
+                                if (!error && (!data || data.length === 0)) {
+                                    // No recent log entry, safe to log as new contestant
+                                    logActivity('new_contestant', kickUser, displayName, null, {
+                                        points: points,
+                                        rfid_count: rfids,
+                                        coordinates: [lat, lng],
+                                        first_seen: new Date(currentTime).toISOString()
+                                    });
+                                }
+                            });
+                    }
                 }
             });
         }
