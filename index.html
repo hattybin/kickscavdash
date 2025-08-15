@@ -230,21 +230,20 @@
         
         .video-panel-resize-handle {
             position: absolute;
-            bottom: 2px;
-            right: 2px;
-            width: 16px;
-            height: 16px;
-            background: #00ff41;
-            border: 1px solid #000;
-            cursor: nw-resize;
-            z-index: 1002;
+            bottom: 0px;
+            right: 0px;
+            width: 20px;
+            height: 20px;
+            background: #ff0000; /* Bright red for debugging */
+            border: 2px solid #fff;
+            cursor: se-resize;
+            z-index: 9999; /* Very high z-index */
             pointer-events: all;
-            opacity: 0.8;
+            opacity: 1;
         }
         
         .video-panel-resize-handle:hover {
-            opacity: 1;
-            background: #00cc35;
+            background: #ff4444;
         }
         
         
@@ -3114,8 +3113,8 @@
         // Smart positioning that avoids existing UI elements
         // UI boundaries: info-panel (top-right), controls (left), overlay (bottom-left), etc.
         function calculateSafePositions() {
-            const panelWidth = 220;
-            const panelHeight = 143;
+            const panelWidth = 330;  // Updated to match CSS
+            const panelHeight = 215; // Updated to match CSS  
             const gap = 10;
             
             return [
@@ -3169,6 +3168,10 @@
             Object.keys(position).forEach(key => {
                 panel.style[key] = position[key];
             });
+            
+            // Force correct size (override any conflicting styles)
+            panel.style.width = '330px';
+            panel.style.height = '215px';
             
             panel.innerHTML = `
                 <div class="video-panel-header">
@@ -3284,6 +3287,11 @@
         
         function makePanelResizable(panel) {
             const handle = panel.querySelector('.video-panel-resize-handle');
+            console.log('Making panel resizable, handle found:', !!handle, handle);
+            if (!handle) {
+                console.error('Resize handle not found!');
+                return;
+            }
             let isResizing = false;
             let startSize = { width: 0, height: 0 };
             let startPos = { x: 0, y: 0 };
