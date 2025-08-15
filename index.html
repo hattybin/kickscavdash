@@ -3096,6 +3096,7 @@
             const panelWidth = 413;  // Updated to match CSS
             const panelHeight = 269; // Updated to match CSS  
             const gap = 10;
+            const statsPanelWidth = 270; // Account for stats panel (250px + padding/border)
             
             return [
                 // Top row - between controls and info panel
@@ -3103,14 +3104,14 @@
                 { top: `${gap}px`, left: `${240 + panelWidth + gap}px` },
                 { top: `${gap}px`, left: `${240 + (panelWidth + gap) * 2}px` },
                 
-                // Right side - below refresh dropdown, above bottom UI
-                { top: '80px', right: `${gap}px` }, // Below refresh control
-                { top: `${80 + panelHeight + gap}px`, right: `${gap}px` },
-                { top: `${80 + (panelHeight + gap) * 2}px`, right: `${gap}px` },
+                // Right side - avoid stats panel, stack vertically
+                { top: '80px', right: `${statsPanelWidth + gap}px` }, // Clear of stats panel
+                { top: `${80 + panelHeight + gap}px`, right: `${statsPanelWidth + gap}px` },
+                { top: `${80 + (panelHeight + gap) * 2}px`, right: `${statsPanelWidth + gap}px` },
                 
                 // Bottom row - above status, right of overlay
-                { bottom: '90px', right: `${gap}px` }, // Above status messages
-                { bottom: '90px', right: `${gap + panelWidth + gap}px` },
+                { bottom: '90px', right: `${statsPanelWidth + gap}px` }, // Clear of stats panel
+                { bottom: '90px', right: `${statsPanelWidth + gap + panelWidth + gap}px` },
                 { bottom: '90px', left: '240px' }, // Right of DariusIRL overlay
                 
                 // Left side - below search panel, above overlay
